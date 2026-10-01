@@ -1,0 +1,10 @@
+[
+    {
+        "merged": "app.edroid.app-debug-38:/drawable_ic_launcher_foreground.xml.flat",
+        "source": "app.edroid.app-main-40:/drawable/ic_launcher_foreground.xml"
+    },
+    {
+        "merged": "app.edroid.app-debug-38:/mipmap-anydpi-v26_ic_launcher.xml.flat",
+        "source": "app.edroid.app-main-40:/mipmap-anydpi-v26/ic_launcher.xml"
+    }
+]

@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="app.edroid.data.fdroid.AppMappingTest" tests="3" skipped="0" failures="0" errors="0" timestamp="2026-10-01T14:27:57.313Z" hostname="POR251217001" time="0.273">
+  <properties/>
+  <testcase name="localized prefers exact tag then language then english" classname="app.edroid.data.fdroid.AppMappingTest" time="0.188"/>
+  <testcase name="entry json from f-droid parses" classname="app.edroid.data.fdroid.AppMappingTest" time="0.031"/>
+  <testcase name="package maps to app with locale fallback and preferred signer" classname="app.edroid.data.fdroid.AppMappingTest" time="0.053"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

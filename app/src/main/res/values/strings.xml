@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">EDroid</string>
+    <string name="subtitle_repo_address">f-droid.org/repo</string>
+    <string name="subtitle_apps_updated">%1$d apps · index updated %2$s</string>
+    <string name="search_hint">Search apps</string>
+    <string name="action_refresh">Refresh</string>
+    <string name="action_clear">Clear search</string>
+    <string name="action_retry">Retry</string>
+    <string name="loading_entry">Checking repository…</string>
+    <string name="loading_index">Downloading package index…</string>
+    <string name="loading_parsing">Reading packages…</string>
+    <string name="error_title">Couldn\'t load the repository</string>
+    <string name="empty_results">No apps match your search</string>
+</resources>

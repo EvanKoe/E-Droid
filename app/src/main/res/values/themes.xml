@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Compose draws everything; the platform theme only needs to be edge-to-edge friendly. -->
+    <style name="Theme.EDroid" parent="android:Theme.Material.NoActionBar">
+        <item name="android:windowLightStatusBar">?android:attr/isLightTheme</item>
+    </style>
+</resources>

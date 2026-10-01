@@ -1,0 +1,58 @@
+package app.edroid.data.fdroid.model
+
+import java.util.Locale
+
+/**
+ * Lean, display-ready projection of a [PackageV2]. The full index for f-droid.org is ~60 MB of
+ * JSON; keeping every localized description in memory is wasteful, so the streaming parser maps
+ * each package into this shape as it goes and drops the raw object.
+ */
+data class App(
+    val packageName: String,
+    val name: String,
+    val summary: String?,
+    val iconUrl: String?,
+    val license: String?,
+    val categories: List<String>,
+    val authorName: String?,
+    val added: Long,
+    val lastUpdated: Long,
+    val latestVersionName: String?,
+    val latestVersionCode: Long?,
+    val suggestedApkUrl: String?,
+    val antiFeatures: Set<String>,
+) {
+    companion object {
+        fun from(
+            packageName: String,
+            pkg: PackageV2,
+            repo: Repository,
+            locale: Locale = Locale.getDefault(),
+        ): App {
+            val meta = pkg.metadata
+            // Prefer the newest version signed by the preferred signer; fall back to the newest overall.
+            val latest = pkg.versions.values
+                .filter { v ->
+                    val signer = meta.preferredSigner ?: return@filter true
+                    v.manifest.signer?.sha256?.contains(signer) == true
+                }
+                .maxByOrNull { it.versionCode }
+                ?: pkg.versions.values.maxByOrNull { it.versionCode }
+            return App(
+                packageName = packageName,
+                name = meta.name?.localized(locale) ?: packageName,
+                summary = meta.summary?.localized(locale),
+                iconUrl = repo.resolve(meta.icon?.localized(locale)),
+                license = meta.license,
+                categories = meta.categories,
+                authorName = meta.authorName,
+                added = meta.added,
+                lastUpdated = meta.lastUpdated,
+                latestVersionName = latest?.versionName,
+                latestVersionCode = latest?.versionCode,
+                suggestedApkUrl = latest?.let { repo.resolve(it.file) },
+                antiFeatures = latest?.antiFeatures?.keys ?: emptySet(),
+            )
+        }
+    }
+}
