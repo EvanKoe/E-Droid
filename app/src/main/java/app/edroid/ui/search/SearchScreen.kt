@@ -24,13 +24,10 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.LargeFlexibleTopAppBar
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextField
 import androidx.compose.material3.TextFieldDefaults
-import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
@@ -41,66 +38,68 @@ import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import app.edroid.R
 import app.edroid.ui.components.AppCard
+import app.edroid.ui.components.PageTitle
 import app.edroid.ui.components.SectionTitle
 import app.edroid.ui.theme.GroupedItemSpacing
 import app.edroid.ui.theme.Layering
+import app.edroid.ui.theme.PageHorizontalPadding
 import app.edroid.ui.theme.groupedShapeAt
 
 /**
- * Search tab: a search field, then either the browse view (recent searches + categories) or,
- * once the user types or picks a category, the matching apps.
+ * Search tab: page heading, a search field, then either the browse view (recent searches +
+ * categories) or, once the user types or picks a category, the matching apps.
+ *
+ * @param contentPadding insets handed down by `MainScreen` so content clears both scrims.
  */
 @Composable
 fun SearchScreen(
-    bottomPadding: Dp = 0.dp,
+    contentPadding: PaddingValues,
     viewModel: SearchViewModel = viewModel(factory = SearchViewModel.Factory),
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val keyboard = LocalSoftwareKeyboardController.current
 
-    Scaffold(
-        containerColor = Layering.page,
-        topBar = {
-            LargeFlexibleTopAppBar(
-                title = { Text(stringResource(R.string.search_title)) },
-                colors = TopAppBarDefaults.largeTopAppBarColors(
-                    containerColor = Layering.page,
-                    scrolledContainerColor = Layering.page,
-                ),
-            )
-        },
-    ) { innerPadding ->
-        Column(modifier = Modifier.padding(innerPadding).fillMaxSize()) {
-            SearchField(
-                query = state.query,
-                onQueryChange = viewModel::onQueryChange,
-                onSearch = {
-                    viewModel.commitSearch()
-                    keyboard?.hide()
-                },
-                onClear = viewModel::clearQuery,
-                modifier = Modifier.padding(horizontal = 16.dp),
-            )
-            Spacer(Modifier.height(8.dp))
+    // The heading and field stay put; only the list below them scrolls, so the lists get the
+    // bottom clearance while the column takes the top and side insets.
+    val listPadding = PaddingValues(top = 4.dp, bottom = contentPadding.calculateBottomPadding())
 
-            val listPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 4.dp, bottom = 24.dp + bottomPadding)
-            if (state.showResults) {
-                ResultsList(state, listPadding, onClearCategory = { viewModel.onCategorySelected(null) })
-            } else {
-                BrowseList(
-                    state = state,
-                    contentPadding = listPadding,
-                    onRecentSelected = viewModel::onRecentSelected,
-                    onRemoveRecent = viewModel::onRemoveRecent,
-                    onCategorySelected = viewModel::onCategorySelected,
-                )
-            }
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(
+                start = PageHorizontalPadding,
+                end = PageHorizontalPadding,
+                top = contentPadding.calculateTopPadding(),
+            ),
+    ) {
+        PageTitle(text = stringResource(R.string.search_title))
+        Spacer(Modifier.height(8.dp))
+        SearchField(
+            query = state.query,
+            onQueryChange = viewModel::onQueryChange,
+            onSearch = {
+                viewModel.commitSearch()
+                keyboard?.hide()
+            },
+            onClear = viewModel::clearQuery,
+        )
+        Spacer(Modifier.height(8.dp))
+
+        if (state.showResults) {
+            ResultsList(state, listPadding, onClearCategory = { viewModel.onCategorySelected(null) })
+        } else {
+            BrowseList(
+                state = state,
+                contentPadding = listPadding,
+                onRecentSelected = viewModel::onRecentSelected,
+                onRemoveRecent = viewModel::onRemoveRecent,
+                onCategorySelected = viewModel::onCategorySelected,
+            )
         }
     }
 }
@@ -202,7 +201,6 @@ private fun ResultsList(
                 trailingIcon = {
                     Icon(Icons.Rounded.Clear, contentDescription = stringResource(R.string.action_clear), modifier = Modifier.width(18.dp))
                 },
-                modifier = Modifier.padding(horizontal = 16.dp),
             )
         }
         if (state.results.isEmpty()) {

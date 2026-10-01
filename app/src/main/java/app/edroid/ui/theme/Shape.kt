@@ -34,3 +34,6 @@ fun groupedShape(isFirst: Boolean = false, isLast: Boolean = false) = RoundedCor
 /** [groupedShape] for the item at [index] in a list of [count] items. */
 fun groupedShapeAt(index: Int, count: Int) =
     groupedShape(isFirst = index == 0, isLast = index == count - 1)
+
+/** Horizontal inset between a page's content and the screen edge. */
+val PageHorizontalPadding: Dp = 16.dp

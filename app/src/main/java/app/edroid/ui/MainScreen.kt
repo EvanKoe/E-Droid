@@ -8,11 +8,16 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.statusBars
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Home
 import androidx.compose.material.icons.rounded.Search
@@ -39,6 +44,7 @@ import app.edroid.ui.components.NavBarItem
 import app.edroid.ui.options.OptionsScreen
 import app.edroid.ui.search.SearchScreen
 import app.edroid.ui.theme.Layering
+import app.edroid.ui.theme.PageHorizontalPadding
 
 /** The three top-level tabs, in the order the nav bar shows them. */
 private enum class HomeTab(
@@ -52,16 +58,23 @@ private enum class HomeTab(
 
 /**
  * Extra bottom padding every tab's scrolling content needs so its last item clears the floating
- * nav bar (~64dp tall) plus its 16dp margin, with some breathing room. System bar insets are
- * handled by each tab's own Scaffold.
+ * nav bar (~64dp tall) plus its 16dp margin, with some breathing room.
  */
 private val NavBarClearance: Dp = 96.dp
+
+/** How far the top scrim extends below the status bar. */
+private val TopScrimExtent: Dp = 40.dp
 
 private const val PAGE_TRANSITION_MS = 300
 
 /**
- * Root of the in-app UI: the current tab's content under a bottom scrim, and a floating
- * expressive navigation bar switching between Home, Search and Options.
+ * Root of the in-app UI: the current tab's content between a top and a bottom scrim, and a
+ * floating expressive navigation bar switching between Home, Search and Options.
+ *
+ * No tab has an app bar: each page carries its own heading as scrolling content (see
+ * `PageTitle`), so a bar would only waste height at the top. A scrim mirroring the bottom one
+ * stands in for it, fading scrolled content out under the status bar. Content padding is computed
+ * once here so every tab clears both scrims without having to know about them.
  */
 @Composable
 fun MainScreen() {
@@ -70,6 +83,18 @@ fun MainScreen() {
     val current = tabs[selectedIndex.coerceIn(0, tabs.lastIndex)]
     val haptics = LocalHapticFeedback.current
     val surface = Layering.page
+
+    val navBarBottomInset = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
+    val statusBarTopInset = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
+    // The scrim is only a fade for *scrolled* content, so content at rest starts below it —
+    // same relationship the bottom padding has with the bottom scrim.
+    val topScrimHeight = statusBarTopInset + TopScrimExtent
+    val contentPadding = PaddingValues(
+        start = PageHorizontalPadding,
+        end = PageHorizontalPadding,
+        top = topScrimHeight + 8.dp,
+        bottom = NavBarClearance + navBarBottomInset,
+    )
 
     Box(modifier = Modifier.fillMaxSize().background(surface)) {
         AnimatedContent(
@@ -80,9 +105,9 @@ fun MainScreen() {
             label = "homeTab",
         ) { tab ->
             when (tab) {
-                HomeTab.Home -> AppListScreen(bottomPadding = NavBarClearance)
-                HomeTab.Search -> SearchScreen(bottomPadding = NavBarClearance)
-                HomeTab.Options -> OptionsScreen(bottomPadding = NavBarClearance)
+                HomeTab.Home -> AppListScreen(contentPadding = contentPadding)
+                HomeTab.Search -> SearchScreen(contentPadding = contentPadding)
+                HomeTab.Options -> OptionsScreen(contentPadding = contentPadding)
             }
         }
 
@@ -97,6 +122,22 @@ fun MainScreen() {
                         0f to Color.Transparent,
                         0.7f to surface.copy(alpha = 0.7f),
                         1f to surface,
+                    ),
+                ),
+        )
+
+        // Standing in for the app bar: content fades out under the status bar as it scrolls,
+        // instead of colliding with it.
+        Box(
+            modifier = Modifier
+                .align(Alignment.TopCenter)
+                .fillMaxWidth()
+                .height(topScrimHeight)
+                .background(
+                    Brush.verticalGradient(
+                        0f to surface,
+                        0.3f to surface.copy(alpha = 0.7f),
+                        1f to Color.Transparent,
                     ),
                 ),
         )
