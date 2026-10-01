@@ -1,6 +1,7 @@
 package app.edroid
 
 import android.content.Context
+import app.edroid.data.RecentSearchesStore
 import app.edroid.data.fdroid.FDroidRepository
 import app.edroid.data.fdroid.model.Repository
 import app.edroid.data.fdroid.net.FDroidRepoService
@@ -21,6 +22,8 @@ class AppContainer(context: Context) {
         .build()
 
     private val repoService = FDroidRepoService(okHttpClient, json, tempDir = context.cacheDir.resolve("entry"))
+
+    val recentSearches = RecentSearchesStore(context, json)
 
     val fdroidRepository = FDroidRepository(
         repo = Repository.FDROID,

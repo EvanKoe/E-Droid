@@ -96,7 +96,10 @@ fun EDroidTheme(
     dynamicColor: Boolean = true,
     content: @Composable () -> Unit,
 ) {
-    val base = when {
+    // Layering convention for this app (see Layering.kt):
+    // screens sit on surfaceContainer, list items on surfaceContainerHighest, and the selected
+    // nav pill on background.
+    val colorScheme = when {
         dynamicColor && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S -> {
             val context = LocalContext.current
             if (darkTheme) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
@@ -104,15 +107,6 @@ fun EDroidTheme(
         darkTheme -> DarkColors
         else -> LightColors
     }
-
-    // Inverted layering: the screen itself sits on a tinted `surface` and each list item is a
-    // lighter `background` slab on top of it (instead of white page + tinted cards).
-    // Stock M3 schemes make surface == background, so remap the two roles from the tonal
-    // surface-container steps. Works for dynamic (Material You) and the static palette alike.
-    val colorScheme = base.copy(
-        surface = base.surfaceContainerHigh,
-        background = base.surfaceContainerLowest,
-    )
 
     MaterialExpressiveTheme(
         colorScheme = colorScheme,

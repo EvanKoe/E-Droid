@@ -21,9 +21,8 @@ import kotlinx.coroutines.launch
 
 data class AppListUiState(
     val repoState: RepoState = RepoState.Idle,
-    val query: String = "",
     val selectedCategory: String? = null,
-    /** Visible apps after search + category filtering. */
+    /** Visible apps after category filtering. */
     val apps: List<App> = emptyList(),
     /** Category id → display name, sorted by name. */
     val categories: List<Pair<String, String>> = emptyList(),
@@ -33,24 +32,17 @@ data class AppListUiState(
 
 class AppListViewModel(private val repository: FDroidRepository) : ViewModel() {
 
-    private val query = MutableStateFlow("")
     private val selectedCategory = MutableStateFlow<String?>(null)
     private var refreshJob: Job? = null
 
     val uiState: StateFlow<AppListUiState> =
-        combine(repository.state, query, selectedCategory) { repoState, q, cat ->
+        combine(repository.state, selectedCategory) { repoState, cat ->
             val ready = repoState as? RepoState.Ready
             val all = ready?.apps.orEmpty()
-            val needle = q.trim()
-            val filtered = all.asSequence()
-                .filter { cat == null || cat in it.categories }
-                .filter { needle.isEmpty() || it.matches(needle) }
-                .toList()
             AppListUiState(
                 repoState = repoState,
-                query = q,
                 selectedCategory = cat,
-                apps = filtered,
+                apps = if (cat == null) all else all.filter { cat in it.categories },
                 categories = ready?.repo?.categories?.toList()?.sortedBy { it.second }.orEmpty(),
                 repo = ready?.repo,
                 totalApps = all.size,
@@ -66,14 +58,8 @@ class AppListViewModel(private val repository: FDroidRepository) : ViewModel() {
         refreshJob = viewModelScope.launch { repository.refresh(force) }
     }
 
-    fun onQueryChange(value: String) = query.update { value }
-
+    /** Toggles [id]: selecting the active category clears the filter. */
     fun onCategorySelected(id: String?) = selectedCategory.update { if (it == id) null else id }
-
-    private fun App.matches(needle: String): Boolean =
-        name.contains(needle, ignoreCase = true) ||
-            packageName.contains(needle, ignoreCase = true) ||
-            summary?.contains(needle, ignoreCase = true) == true
 
     companion object {
         val Factory: ViewModelProvider.Factory = viewModelFactory {
