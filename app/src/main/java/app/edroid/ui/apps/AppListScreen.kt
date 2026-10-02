@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyItemScope
 import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
@@ -29,8 +30,15 @@ import androidx.compose.material3.LoadingIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
+import androidx.compose.material3.pulltorefresh.PullToRefreshDefaults
+import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
@@ -70,40 +78,77 @@ fun AppListScreen(
         bottom = contentPadding.calculateBottomPadding(),
     )
 
-    LazyColumn(
+    // Only a pull-initiated refresh drives the pull indicator; background syncs keep using the
+    // inline strip so the indicator doesn't pop in on its own. Cleared once the sync settles.
+    var pullRefreshing by remember { mutableStateOf(false) }
+    val syncing = state.sync is SyncState.Loading
+    LaunchedEffect(syncing) { if (!syncing) pullRefreshing = false }
+
+    val pullState = rememberPullToRefreshState()
+    PullToRefreshBox(
+        isRefreshing = pullRefreshing,
+        onRefresh = {
+            pullRefreshing = true
+            viewModel.refresh(force = false)
+        },
         modifier = Modifier.fillMaxSize(),
-        contentPadding = listPadding,
-        verticalArrangement = Arrangement.spacedBy(GroupedItemSpacing),
+        state = pullState,
+        indicator = {
+            PullToRefreshDefaults.LoadingIndicator(
+                state = pullState,
+                isRefreshing = pullRefreshing,
+                modifier = Modifier
+                    .align(Alignment.TopCenter)
+                    .padding(top = contentPadding.calculateTopPadding()),
+            )
+        },
     ) {
-        item(key = "header") {
-            RepoHeader(state = state, onRefresh = { viewModel.refresh(force = false) })
-        }
-        if (state.categories.isNotEmpty()) {
-            item(key = "categories") {
-                CategoryRow(
-                    categories = state.categories,
-                    selected = state.selectedCategory,
-                    onSelect = viewModel::onCategorySelected,
-                )
+        LazyColumn(
+            modifier = Modifier.fillMaxSize(),
+            contentPadding = listPadding,
+            verticalArrangement = Arrangement.spacedBy(GroupedItemSpacing),
+        ) {
+            item(key = "header") {
+                RepoHeader(state = state, onRefresh = { viewModel.refresh(force = false) })
             }
-        }
-        val sync = state.sync
-        if (state.hasData) {
-            when (sync) {
-                is SyncState.Loading -> item(key = "sync") { SyncStrip(sync) }
-                is SyncState.Error -> item(key = "sync") {
-                    SyncErrorRow(sync.message) { viewModel.refresh(force = true) }
+            if (state.categories.isNotEmpty()) {
+                item(key = "categories") {
+                    CategoryRow(
+                        categories = state.categories,
+                        selected = state.selectedCategory,
+                        onSelect = viewModel::onCategorySelected,
+                        modifier = animateListItem(),
+                    )
                 }
-                SyncState.Idle -> Unit
             }
-            appItems(state.apps)
-        } else {
-            when (sync) {
-                is SyncState.Loading -> item(key = "loading") { LoadingContent(sync) }
-                is SyncState.Error -> item(key = "error") {
-                    ErrorContent(sync.message) { viewModel.refresh(force = true) }
+            // Loading and error variants use distinct keys so a switch between them crossfades
+            // rather than swapping content inside the same slot.
+            val sync = state.sync
+            if (state.hasData) {
+                when (sync) {
+                    is SyncState.Loading -> item(key = "sync-loading") {
+                        SyncStrip(sync, animateListItem())
+                    }
+                    is SyncState.Error -> item(key = "sync-error") {
+                        SyncErrorRow(sync.message, animateListItem()) {
+                            viewModel.refresh(force = true)
+                        }
+                    }
+                    SyncState.Idle -> Unit
                 }
-                SyncState.Idle -> Unit
+                appItems(state.apps)
+            } else {
+                when (sync) {
+                    is SyncState.Loading -> item(key = "loading") {
+                        LoadingContent(sync, animateListItem())
+                    }
+                    is SyncState.Error -> item(key = "error") {
+                        ErrorContent(sync.message, animateListItem()) {
+                            viewModel.refresh(force = true)
+                        }
+                    }
+                    SyncState.Idle -> Unit
+                }
             }
         }
     }
@@ -144,8 +189,10 @@ private fun CategoryRow(
     categories: List<Pair<String, String>>,
     selected: String?,
     onSelect: (String?) -> Unit,
+    modifier: Modifier = Modifier,
 ) {
     LazyRow(
+        modifier = modifier,
         contentPadding = PaddingValues(horizontal = PageHorizontalPadding, vertical = 12.dp),
         horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
@@ -168,9 +215,9 @@ private val SyncState.Loading.Phase.label: Int
 
 /** Slim status line shown above an already-loaded list while a refresh runs. */
 @Composable
-private fun SyncStrip(state: SyncState.Loading) {
+private fun SyncStrip(state: SyncState.Loading, modifier: Modifier = Modifier) {
     Column(
-        modifier = Modifier
+        modifier = modifier
             .fillMaxWidth()
             .padding(horizontal = PageHorizontalPadding + 12.dp, vertical = 4.dp),
     ) {
@@ -191,9 +238,9 @@ private fun SyncStrip(state: SyncState.Loading) {
 
 /** Compact failure notice above an already-loaded list: the cached apps stay usable. */
 @Composable
-private fun SyncErrorRow(message: String, onRetry: () -> Unit) {
+private fun SyncErrorRow(message: String, modifier: Modifier = Modifier, onRetry: () -> Unit) {
     Row(
-        modifier = Modifier
+        modifier = modifier
             .fillMaxWidth()
             .padding(horizontal = PageHorizontalPadding + 12.dp, vertical = 4.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -218,9 +265,9 @@ private fun SyncErrorRow(message: String, onRetry: () -> Unit) {
 }
 
 @Composable
-private fun LoadingContent(state: SyncState.Loading) {
+private fun LoadingContent(state: SyncState.Loading, modifier: Modifier = Modifier) {
     Column(
-        modifier = Modifier.fillMaxWidth().padding(32.dp),
+        modifier = modifier.fillMaxWidth().padding(32.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         LoadingIndicator(modifier = Modifier.size(72.dp))
@@ -237,9 +284,9 @@ private fun LoadingContent(state: SyncState.Loading) {
 }
 
 @Composable
-private fun ErrorContent(message: String, onRetry: () -> Unit) {
+private fun ErrorContent(message: String, modifier: Modifier = Modifier, onRetry: () -> Unit) {
     Column(
-        modifier = Modifier.fillMaxWidth().padding(32.dp),
+        modifier = modifier.fillMaxWidth().padding(32.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         Icon(
@@ -265,7 +312,10 @@ private fun ErrorContent(message: String, onRetry: () -> Unit) {
 private fun LazyListScope.appItems(apps: List<app.edroid.data.fdroid.model.App>) {
     if (apps.isEmpty()) {
         item(key = "empty") {
-            Box(Modifier.fillMaxWidth().padding(32.dp), contentAlignment = Alignment.Center) {
+            Box(
+                animateListItem().fillMaxWidth().padding(32.dp),
+                contentAlignment = Alignment.Center,
+            ) {
                 Text(stringResource(R.string.empty_results), style = MaterialTheme.typography.bodyLarge)
             }
         }
@@ -275,7 +325,21 @@ private fun LazyListScope.appItems(apps: List<app.edroid.data.fdroid.model.App>)
         AppCard(
             app,
             shape = groupedShapeAt(index, apps.size),
-            modifier = Modifier.padding(horizontal = PageHorizontalPadding),
+            modifier = animateListItem().padding(horizontal = PageHorizontalPadding),
         )
     }
+}
+
+/**
+ * Fades an item in and out as it enters or leaves the list, and slides its neighbours into place,
+ * using the theme's expressive motion so status rows don't pop in and push the cards abruptly.
+ */
+@Composable
+private fun LazyItemScope.animateListItem(): Modifier {
+    val motion = MaterialTheme.motionScheme
+    return Modifier.animateItem(
+        fadeInSpec = motion.defaultEffectsSpec(),
+        placementSpec = motion.defaultSpatialSpec(),
+        fadeOutSpec = motion.fastEffectsSpec(),
+    )
 }
