@@ -1,22 +1,26 @@
 package app.edroid.ui.search
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowRight
 import androidx.compose.material.icons.rounded.Clear
 import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material3.Card
@@ -41,6 +45,7 @@ import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -53,6 +58,7 @@ import app.edroid.ui.components.SectionTitle
 import app.edroid.ui.theme.GroupedItemSpacing
 import app.edroid.ui.theme.Layering
 import app.edroid.ui.theme.PageHorizontalPadding
+import app.edroid.ui.theme.gridGroupedShapeAt
 import app.edroid.ui.theme.groupedShapeAt
 
 /**
@@ -191,12 +197,24 @@ private fun BrowseList(
         }
         if (state.categories.isNotEmpty()) {
             item(key = "categories-title") { SectionTitle(stringResource(R.string.categories)) }
-            itemsIndexed(state.categories, key = { _, c -> "cat:${c.first}" }) { index, (id, name) ->
-                CategoryRow(
-                    name = name,
-                    shape = groupedShapeAt(index, state.categories.size),
-                    onClick = { onCategorySelected(id) },
-                )
+            val count = state.categories.size
+            itemsIndexed(state.categories.chunked(CategoryColumns), key = { _, row -> "cat:${row.first().first}" }) { rowIndex, row ->
+                val rowStart = rowIndex * CategoryColumns
+                Row(
+                    modifier = Modifier.height(IntrinsicSize.Min),
+                    horizontalArrangement = Arrangement.spacedBy(GroupedItemSpacing),
+                ) {
+                    row.forEachIndexed { i, (id, name) ->
+                        CategoryTile(
+                            id = id,
+                            name = name,
+                            shape = gridGroupedShapeAt(rowStart + i, count, CategoryColumns),
+                            onClick = { onCategorySelected(id) },
+                            modifier = Modifier.weight(1f).fillMaxHeight(),
+                        )
+                    }
+                    repeat(CategoryColumns - row.size) { Spacer(Modifier.weight(1f)) }
+                }
             }
         } else if (!state.indexReady) {
             item(key = "loading") {
@@ -271,21 +289,37 @@ private fun RecentSearchRow(query: String, shape: Shape, onClick: () -> Unit, on
     }
 }
 
+private const val CategoryColumns = 3
+
+/** A grid cell: colored icon badge above the category name, centered. */
 @Composable
-private fun CategoryRow(name: String, shape: Shape, onClick: () -> Unit) {
-    GroupedRow(shape = shape, onClick = onClick) {
-        Text(
-            name,
-            style = MaterialTheme.typography.bodyLarge,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.weight(1f),
-        )
-        Icon(
-            Icons.AutoMirrored.Rounded.KeyboardArrowRight,
-            contentDescription = null,
-            tint = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
+private fun CategoryTile(id: String, name: String, shape: Shape, onClick: () -> Unit, modifier: Modifier = Modifier) {
+    Card(
+        onClick = onClick,
+        modifier = modifier,
+        shape = shape,
+        colors = CardDefaults.cardColors(containerColor = Layering.item),
+    ) {
+        Column(
+            modifier = Modifier.fillMaxSize().padding(horizontal = 8.dp, vertical = 20.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center,
+        ) {
+            Box(
+                modifier = Modifier.size(48.dp).background(categoryColor(id), RoundedCornerShape(14.dp)),
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(categoryIcon(id), contentDescription = null, tint = Color.White, modifier = Modifier.size(26.dp))
+            }
+            Spacer(Modifier.height(12.dp))
+            Text(
+                name,
+                style = MaterialTheme.typography.bodyMedium,
+                textAlign = TextAlign.Center,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
     }
 }
 

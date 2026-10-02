@@ -42,5 +42,22 @@ fun horizontalGroupedShapeAt(index: Int, count: Int): RoundedCornerShape {
     return RoundedCornerShape(topStart = start, bottomStart = start, topEnd = end, bottomEnd = end)
 }
 
+/**
+ * [groupedShapeAt] for a grid of [columns]: outer radius only on the corners of the whole block,
+ * including the corners a partial last row exposes.
+ */
+fun gridGroupedShapeAt(index: Int, count: Int, columns: Int): RoundedCornerShape {
+    val col = index % columns
+    val firstRow = index < columns
+    val lastRowStart = (count - 1) / columns * columns
+    fun r(outer: Boolean) = if (outer) GroupedOuterRadius else GroupedInnerRadius
+    return RoundedCornerShape(
+        topStart = r(index == 0),
+        topEnd = r(firstRow && (col == columns - 1 || index == count - 1)),
+        bottomStart = r(index == lastRowStart),
+        bottomEnd = r(index == count - 1 || (col == columns - 1 && index + columns >= count)),
+    )
+}
+
 /** Horizontal inset between a page's content and the screen edge. */
 val PageHorizontalPadding: Dp = 16.dp
