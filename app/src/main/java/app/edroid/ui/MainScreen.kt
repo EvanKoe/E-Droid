@@ -25,6 +25,7 @@ import androidx.compose.material.icons.rounded.Settings
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -79,6 +80,10 @@ private const val PAGE_TRANSITION_MS = 300
 @Composable
 fun MainScreen() {
     var selectedIndex by rememberSaveable { mutableIntStateOf(0) }
+    // Bumped each time the already-selected Search tab is tapped again; the Search page focuses
+    // its field whenever this changes. Reset on every tab change so returning to Search later
+    // doesn't replay a stale request.
+    var searchFocusRequest by remember { mutableIntStateOf(0) }
     val tabs = HomeTab.entries
     val current = tabs[selectedIndex.coerceIn(0, tabs.lastIndex)]
     val haptics = LocalHapticFeedback.current
@@ -106,7 +111,10 @@ fun MainScreen() {
         ) { tab ->
             when (tab) {
                 HomeTab.Home -> AppListScreen(contentPadding = contentPadding)
-                HomeTab.Search -> SearchScreen(contentPadding = contentPadding)
+                HomeTab.Search -> SearchScreen(
+                    contentPadding = contentPadding,
+                    focusRequest = searchFocusRequest,
+                )
                 HomeTab.Options -> OptionsScreen(contentPadding = contentPadding)
             }
         }
@@ -146,8 +154,13 @@ fun MainScreen() {
             items = tabs.map { NavBarItem(stringResource(it.labelRes), it.icon) },
             selectedIndex = selectedIndex,
             onSelect = { index ->
-                if (index != selectedIndex) haptics.performHapticFeedback(HapticFeedbackType.LongPress)
-                selectedIndex = index
+                if (index != selectedIndex) {
+                    haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                    searchFocusRequest = 0
+                    selectedIndex = index
+                } else if (tabs[index] == HomeTab.Search) {
+                    searchFocusRequest++
+                }
             },
             modifier = Modifier
                 .align(Alignment.BottomCenter)

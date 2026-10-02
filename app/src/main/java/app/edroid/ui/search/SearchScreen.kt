@@ -29,9 +29,13 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextField
 import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
@@ -55,14 +59,26 @@ import app.edroid.ui.theme.groupedShapeAt
  * categories) or, once the user types or picks a category, the matching apps.
  *
  * @param contentPadding insets handed down by `MainScreen` so content clears both scrims.
+ * @param focusRequest a counter `MainScreen` bumps when the Search tab is re-tapped while already
+ *   selected; every change (other than the initial 0) focuses the search field and opens the
+ *   keyboard.
  */
 @Composable
 fun SearchScreen(
     contentPadding: PaddingValues,
+    focusRequest: Int = 0,
     viewModel: SearchViewModel = viewModel(factory = SearchViewModel.Factory),
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val keyboard = LocalSoftwareKeyboardController.current
+    val fieldFocus = remember { FocusRequester() }
+
+    LaunchedEffect(focusRequest) {
+        if (focusRequest > 0) {
+            fieldFocus.requestFocus()
+            keyboard?.show()
+        }
+    }
 
     // The heading and field stay put; only the list below them scrolls, so the lists get the
     // bottom clearance while the column takes the top and side insets.
@@ -87,6 +103,7 @@ fun SearchScreen(
                 keyboard?.hide()
             },
             onClear = viewModel::clearQuery,
+            modifier = Modifier.focusRequester(fieldFocus),
         )
         Spacer(Modifier.height(8.dp))
 
