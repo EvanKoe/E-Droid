@@ -61,6 +61,7 @@ import app.edroid.ui.components.EmphasizedEasing
 import app.edroid.ui.components.ExpressiveNavBar
 import app.edroid.ui.components.NavBarItem
 import app.edroid.ui.options.OptionsScreen
+import app.edroid.ui.options.PermissionsDetailsScreen
 import app.edroid.ui.search.CategoryScreen
 import app.edroid.ui.search.SearchScreen
 import app.edroid.ui.theme.Layering
@@ -125,7 +126,8 @@ private fun <S> AnimatedContentTransitionScope<S?>.pageTransition(): ContentTran
  * Tapping an app opens its detail page on top of the tab, which stays composed underneath so its
  * scroll position survives; the nav bar gives way to a back bar until the page is closed. A
  * category from the Search tab opens the same way, one level below any detail page, so back from
- * an app returns to its category and back from the category returns to Search.
+ * an app returns to its category and back from the category returns to Search. The permissions
+ * page opens from the Options tab the same way.
  *
  * No tab has an app bar: each page carries its own heading as scrolling content (see
  * `PageTitle`), so a bar would only waste height at the top. A scrim mirroring the bottom one
@@ -141,6 +143,7 @@ fun MainScreen() {
     var searchFocusRequest by remember { mutableIntStateOf(0) }
     var openApp by rememberSaveable(stateSaver = OpenAppSaver) { mutableStateOf<OpenApp?>(null) }
     var openCategory by rememberSaveable(stateSaver = OpenCategorySaver) { mutableStateOf<OpenCategory?>(null) }
+    var permissionsOpen by rememberSaveable { mutableStateOf(false) }
     val tabs = HomeTab.entries
     val current = tabs[selectedIndex.coerceIn(0, tabs.lastIndex)]
     val haptics = LocalHapticFeedback.current
@@ -156,13 +159,19 @@ fun MainScreen() {
         keyboard?.hide()
         openCategory = OpenCategory(id, name)
     }
-    // Pops the topmost pushed page: the detail page first, then the category.
+    // Pops the topmost pushed page: the detail page first, then the category or permissions page.
     val goBack: () -> Unit = {
-        if (openApp != null) openApp = null else openCategory = null
+        when {
+            openApp != null -> openApp = null
+            openCategory != null -> openCategory = null
+            else -> permissionsOpen = false
+        }
     }
-    BackHandler(enabled = openApp != null || openCategory != null, onBack = goBack)
+    BackHandler(enabled = openApp != null || openCategory != null || permissionsOpen, onBack = goBack)
+    val permissionsTitle = stringResource(R.string.permissions_title)
     val backTarget = openApp?.let { BackTarget("app:${it.packageName}", it.name) }
         ?: openCategory?.let { BackTarget("category:${it.id}", it.name) }
+        ?: if (permissionsOpen) BackTarget("permissions", permissionsTitle) else null
     val surface = Layering.page
 
     val navBarBottomInset = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
@@ -193,7 +202,10 @@ fun MainScreen() {
                     onAppClick = onAppClick,
                     onCategoryClick = onCategoryClick,
                 )
-                HomeTab.Options -> OptionsScreen(contentPadding = contentPadding)
+                HomeTab.Options -> OptionsScreen(
+                    contentPadding = contentPadding,
+                    onPermissionsClick = { permissionsOpen = true },
+                )
             }
         }
 
@@ -214,6 +226,15 @@ fun MainScreen() {
                     onAppClick = onAppClick,
                 )
             }
+        }
+
+        AnimatedContent(
+            targetState = permissionsOpen.takeIf { it },
+            modifier = Modifier.fillMaxSize(),
+            transitionSpec = { pageTransition() },
+            label = "permissions",
+        ) { open ->
+            if (open != null) PermissionsDetailsScreen(contentPadding = contentPadding)
         }
 
         AnimatedContent(

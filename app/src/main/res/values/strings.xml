@@ -15,7 +15,42 @@
     <string name="categories">Categories</string>
     <string name="search_index_loading">Waiting for the package index…</string>
     <string name="options_title">Options</string>
-    <string name="options_empty">Nothing here yet</string>
+    <string name="options_general">General</string>
+    <string name="options_permissions">Permissions</string>
+    <string name="options_permissions_summary">What EDroid asks for and why</string>
+    <string name="permissions_title">Permissions</string>
+    <string name="permissions_intro">EDroid only asks for what an app store needs. Some permissions are granted when you install EDroid; others are asked the first time a feature needs them, and you can change them any time in system settings.</string>
+    <string name="permissions_optional">Optional</string>
+    <string name="permissions_used_for">What it is used for</string>
+    <string name="permission_internet_title">Internet access</string>
+    <string name="permission_internet_why">Granted when you install EDroid and never asked for. EDroid only talks to the F-Droid repository; it has no analytics or tracking.</string>
+    <string-array name="permission_internet_uses">
+        <item>Download the repository index</item>
+        <item>Load app icons and screenshots</item>
+        <item>Download the APK files you choose to install</item>
+    </string-array>
+    <string name="permission_query_packages_title">See installed apps</string>
+    <string name="permission_query_packages_why">Granted when you install EDroid and never asked for. The list of apps on your device never leaves it.</string>
+    <string-array name="permission_query_packages_uses">
+        <item>Tell which repository apps are already installed, and at which version</item>
+        <item>Show Install, Update or Uninstall on each app</item>
+    </string-array>
+    <string name="permission_install_title">Install unknown apps</string>
+    <string name="permission_install_why">Asked by Android the first time you install an app. Android requires it before any app other than the system store can install apps, and still asks you to confirm each install. Without it you can browse, but Install and Update won\'t work.</string>
+    <string-array name="permission_install_uses">
+        <item>Install the apps you choose from the repository</item>
+        <item>Update installed apps to newer versions</item>
+    </string-array>
+    <string name="permission_delete_title">Uninstall apps</string>
+    <string name="permission_delete_why">Granted when you install EDroid and never asked for. EDroid never removes an app on its own: Android always asks you to confirm.</string>
+    <string-array name="permission_delete_uses">
+        <item>Open Android\'s uninstall dialog from the Uninstall button</item>
+    </string-array>
+    <string name="permission_notifications_title">Notifications</string>
+    <string name="permission_notifications_why">Optional, and only asked for on Android 13 and later, the first time you tap Install. If you decline, installs still work; just come back to EDroid to finish them.</string>
+    <string-array name="permission_notifications_uses">
+        <item>Tell you a download is ready to install while EDroid is in the background</item>
+    </string-array>
     <string name="action_retry">Retry</string>
     <string name="loading_entry">Checking repository…</string>
     <string name="loading_index">Downloading package index…</string>
