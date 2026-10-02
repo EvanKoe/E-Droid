@@ -16,7 +16,9 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
@@ -42,6 +44,8 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.ImeAction
@@ -93,9 +97,13 @@ fun SearchScreen(
     }
 
     // The heading and field stay put; only the list below them scrolls, so the lists get the
-    // bottom clearance while the column takes the top and side insets. The list starts below the
-    // field scrim at rest, the same way `MainScreen` keeps content clear of its top scrim.
-    val listPadding = PaddingValues(top = FieldScrimHeight, bottom = contentPadding.calculateBottomPadding())
+    // bottom clearance while the column takes the top and side insets.
+    val listPadding = PaddingValues(top = 12.dp, bottom = contentPadding.calculateBottomPadding())
+    // Hoisted so the field scrim can follow whichever list is showing.
+    val browseListState = rememberLazyListState()
+    val resultsListState = rememberLazyListState()
+    val activeListState = if (state.showResults) resultsListState else browseListState
+    val scrimHeightPx = with(LocalDensity.current) { FieldScrimHeight.toPx() }
 
     Column(
         modifier = Modifier
@@ -121,10 +129,11 @@ fun SearchScreen(
 
         Box(Modifier.weight(1f).fillMaxWidth()) {
             if (state.showResults) {
-                ResultsList(state, listPadding, onAppClick = onAppClick)
+                ResultsList(state, resultsListState, listPadding, onAppClick = onAppClick)
             } else {
                 BrowseList(
                     state = state,
+                    listState = browseListState,
                     contentPadding = listPadding,
                     onRecentSelected = viewModel::onRecentSelected,
                     onRemoveRecent = viewModel::onRemoveRecent,
@@ -133,13 +142,22 @@ fun SearchScreen(
             }
 
             // Like `MainScreen`'s top scrim, but under the field: scrolled rows fade out beneath
-            // it instead of being cut off at its edge.
+            // it instead of being cut off at its edge. It is taller than the list's resting gap,
+            // so it fades in over the first stretch of scroll rather than veiling the top row at
+            // rest. Alpha is read in the draw phase, so scrolling doesn't recompose.
             val surface = Layering.page
             Box(
                 modifier = Modifier
                     .align(Alignment.TopCenter)
                     .fillMaxWidth()
                     .height(FieldScrimHeight)
+                    .graphicsLayer {
+                        alpha = if (activeListState.firstVisibleItemIndex > 0) {
+                            1f
+                        } else {
+                            (activeListState.firstVisibleItemScrollOffset / scrimHeightPx).coerceIn(0f, 1f)
+                        }
+                    }
                     .background(
                         Brush.verticalGradient(
                             0f to surface,
@@ -152,8 +170,8 @@ fun SearchScreen(
     }
 }
 
-/** Height of the fade under the search field, which is also the list's top padding at rest. */
-private val FieldScrimHeight: Dp = 16.dp
+/** Height of the fade under the search field; matches `MainScreen`'s top scrim extent. */
+private val FieldScrimHeight: Dp = 40.dp
 
 @Composable
 private fun SearchField(
@@ -194,12 +212,14 @@ private fun SearchField(
 @Composable
 private fun BrowseList(
     state: SearchUiState,
+    listState: LazyListState,
     contentPadding: PaddingValues,
     onRecentSelected: (String) -> Unit,
     onRemoveRecent: (String) -> Unit,
     onCategorySelected: (id: String, name: String) -> Unit,
 ) {
     LazyColumn(
+        state = listState,
         contentPadding = contentPadding,
         verticalArrangement = Arrangement.spacedBy(GroupedItemSpacing),
     ) {
@@ -252,6 +272,7 @@ private fun BrowseList(
 @Composable
 private fun ResultsList(
     state: SearchUiState,
+    listState: LazyListState,
     contentPadding: PaddingValues,
     onAppClick: (App) -> Unit,
 ) {
@@ -266,6 +287,7 @@ private fun ResultsList(
             return
         }
         LazyColumn(
+            state = listState,
             contentPadding = contentPadding,
             verticalArrangement = Arrangement.spacedBy(GroupedItemSpacing),
         ) {
