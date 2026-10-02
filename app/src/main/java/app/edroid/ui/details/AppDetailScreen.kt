@@ -7,7 +7,6 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -55,7 +54,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.rotate
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.layout.ContentScale
@@ -195,10 +193,18 @@ private fun Header(
     onInstall: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    // Collapses when the app has no feature graphic or it fails to load.
+    var bannerFailed by remember(bannerUrl) { mutableStateOf(false) }
     Layout(
         modifier = modifier,
         content = {
-            Banner(bannerUrl, Modifier.fillMaxWidth().aspectRatio(BANNER_ASPECT))
+            if (bannerUrl != null && !bannerFailed) {
+                Banner(
+                    bannerUrl,
+                    onError = { bannerFailed = true },
+                    modifier = Modifier.fillMaxWidth().aspectRatio(BANNER_ASPECT),
+                )
+            }
             Row(
                 modifier = Modifier.fillMaxWidth().padding(start = 12.dp, end = 8.dp),
                 verticalAlignment = Alignment.Bottom,
@@ -216,34 +222,28 @@ private fun Header(
         },
     ) { measurables, constraints ->
         val loose = constraints.copy(minHeight = 0)
-        val banner = measurables[0].measure(loose)
-        val row = measurables[1].measure(loose)
-        val rowY = banner.height - IconOverlap.roundToPx()
+        val banner = if (measurables.size > 1) measurables.first().measure(loose) else null
+        val row = measurables.last().measure(loose)
+        val rowY = banner?.let { it.height - IconOverlap.roundToPx() } ?: 0
         layout(constraints.maxWidth, rowY + row.height) {
-            banner.place(0, 0)
+            banner?.place(0, 0)
             row.place(0, rowY)
         }
     }
 }
 
-/** The feature graphic, or a tonal gradient for the many apps that don't publish one. */
+/** The feature graphic, on an item-colored tile while it loads. */
 @Composable
-private fun Banner(url: String?, modifier: Modifier = Modifier) {
-    val colors = MaterialTheme.colorScheme
-    Box(
-        modifier
+private fun Banner(url: String, onError: () -> Unit, modifier: Modifier = Modifier) {
+    AsyncImage(
+        model = url,
+        contentDescription = null,
+        contentScale = ContentScale.Crop,
+        onError = { onError() },
+        modifier = modifier
             .clip(RoundedCornerShape(GroupedOuterRadius))
-            .background(Brush.linearGradient(listOf(colors.primaryContainer, colors.tertiaryContainer))),
-    ) {
-        if (url != null) {
-            AsyncImage(
-                model = url,
-                contentDescription = null,
-                contentScale = ContentScale.Crop,
-                modifier = Modifier.matchParentSize(),
-            )
-        }
-    }
+            .background(Layering.item),
+    )
 }
 
 /** App icon on an item-colored tile, ringed in the page color so it cuts into the banner. */
