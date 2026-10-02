@@ -24,6 +24,7 @@ import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.scrollable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
@@ -77,6 +78,7 @@ import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.toString
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -90,6 +92,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.TextLinkStyles
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.fromHtml
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
@@ -216,6 +219,12 @@ fun AppDetailScreen(
             iconUrl = app?.iconUrl,
             modifier = inset,
         ) {
+            Text(
+                text = selected?.versionCode.toString(),
+                color = MaterialTheme.colorScheme.onSecondaryContainer,
+                style = MaterialTheme.typography.labelLarge
+            )
+
             InstallActions(
                 state = ActionsState(
                     install = installState,
@@ -228,8 +237,10 @@ fun AppDetailScreen(
                 onCancel = { installer.cancel(packageName) },
             )
         }
+
         InfoCard(app = app, state = state, modifier = inset)
         MediaStrip(state = state, onScreenshot = { viewerPage = it }, onVideo = openUri)
+
         if (versions.isNotEmpty() || app?.latestVersionName != null) {
             VersionPicker(
                 versions = versions,

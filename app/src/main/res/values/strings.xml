@@ -1,12 +1,15 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">EDroid</string>
-    <string name="subtitle_repo_address">f-droid.org/repo</string>
-    <string name="subtitle_apps_updated">%1$d apps · index updated %2$s</string>
-    <string name="action_refresh">Refresh</string>
     <string name="nav_home">Home</string>
     <string name="nav_search">Search</string>
     <string name="nav_options">Options</string>
+    <string name="home_featured_title">A random app you may like</string>
+    <string name="home_other_apps_title">Other apps</string>
+    <string name="sort_by">Sort by</string>
+    <string name="sort_newest">New apps</string>
+    <string name="sort_updated">Recently updated</string>
+    <string name="sort_name">Name</string>
     <string name="search_title">Search</string>
     <string name="search_hint">Search apps</string>
     <string name="action_clear">Clear</string>
