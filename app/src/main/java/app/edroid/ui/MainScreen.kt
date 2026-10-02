@@ -3,6 +3,8 @@ package app.edroid.ui
 import androidx.activity.compose.BackHandler
 import androidx.annotation.StringRes
 import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.AnimatedContentTransitionScope
+import androidx.compose.animation.ContentTransform
 import androidx.compose.animation.EnterTransition
 import androidx.compose.animation.ExitTransition
 import androidx.compose.animation.core.tween
@@ -59,6 +61,7 @@ import app.edroid.ui.components.EmphasizedEasing
 import app.edroid.ui.components.ExpressiveNavBar
 import app.edroid.ui.components.NavBarItem
 import app.edroid.ui.options.OptionsScreen
+import app.edroid.ui.search.CategoryScreen
 import app.edroid.ui.search.SearchScreen
 import app.edroid.ui.theme.Layering
 import app.edroid.ui.theme.PageHorizontalPadding
@@ -92,12 +95,37 @@ private val OpenAppSaver = Saver<OpenApp?, List<String>>(
     restore = { OpenApp(it[0], it[1]) },
 )
 
+/** The category whose page is open over the Search tab; its name labels the back bar. */
+private data class OpenCategory(val id: String, val name: String)
+
+private val OpenCategorySaver = Saver<OpenCategory?, List<String>>(
+    save = { it?.let { listOf(it.id, it.name) } },
+    restore = { OpenCategory(it[0], it[1]) },
+)
+
+/** What the back bar is labelled with; [key] tells the bar's animation when to swap. */
+private data class BackTarget(val key: String, val title: String)
+
+/** Enters a pushed page (category or detail) by rising over what's beneath, and exits by sinking. */
+private fun <S> AnimatedContentTransitionScope<S?>.pageTransition(): ContentTransform {
+    val slide = tween<IntOffset>(PAGE_TRANSITION_MS, easing = EmphasizedEasing)
+    return if (targetState != null) {
+        (fadeIn(tween(PAGE_TRANSITION_MS)) + slideInVertically(slide) { it / 10 }) togetherWith
+            ExitTransition.None
+    } else {
+        EnterTransition.None togetherWith
+            (fadeOut(tween(PAGE_TRANSITION_MS)) + slideOutVertically(slide) { it / 10 })
+    } using null
+}
+
 /**
  * Root of the in-app UI: the current tab's content between a top and a bottom scrim, and a
  * floating expressive navigation bar switching between Home, Search and Options.
  *
  * Tapping an app opens its detail page on top of the tab, which stays composed underneath so its
- * scroll position survives; the nav bar gives way to a back bar until the page is closed.
+ * scroll position survives; the nav bar gives way to a back bar until the page is closed. A
+ * category from the Search tab opens the same way, one level below any detail page, so back from
+ * an app returns to its category and back from the category returns to Search.
  *
  * No tab has an app bar: each page carries its own heading as scrolling content (see
  * `PageTitle`), so a bar would only waste height at the top. A scrim mirroring the bottom one
@@ -112,6 +140,7 @@ fun MainScreen() {
     // doesn't replay a stale request.
     var searchFocusRequest by remember { mutableIntStateOf(0) }
     var openApp by rememberSaveable(stateSaver = OpenAppSaver) { mutableStateOf<OpenApp?>(null) }
+    var openCategory by rememberSaveable(stateSaver = OpenCategorySaver) { mutableStateOf<OpenCategory?>(null) }
     val tabs = HomeTab.entries
     val current = tabs[selectedIndex.coerceIn(0, tabs.lastIndex)]
     val haptics = LocalHapticFeedback.current
@@ -122,7 +151,18 @@ fun MainScreen() {
         keyboard?.hide()
         openApp = OpenApp(app.packageName, app.name)
     }
-    BackHandler(enabled = openApp != null) { openApp = null }
+    val onCategoryClick: (String, String) -> Unit = { id, name ->
+        focusManager.clearFocus()
+        keyboard?.hide()
+        openCategory = OpenCategory(id, name)
+    }
+    // Pops the topmost pushed page: the detail page first, then the category.
+    val goBack: () -> Unit = {
+        if (openApp != null) openApp = null else openCategory = null
+    }
+    BackHandler(enabled = openApp != null || openCategory != null, onBack = goBack)
+    val backTarget = openApp?.let { BackTarget("app:${it.packageName}", it.name) }
+        ?: openCategory?.let { BackTarget("category:${it.id}", it.name) }
     val surface = Layering.page
 
     val navBarBottomInset = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
@@ -151,26 +191,35 @@ fun MainScreen() {
                     contentPadding = contentPadding,
                     focusRequest = searchFocusRequest,
                     onAppClick = onAppClick,
+                    onCategoryClick = onCategoryClick,
                 )
                 HomeTab.Options -> OptionsScreen(contentPadding = contentPadding)
             }
         }
 
-        // The detail page rises over the tab and sinks back on close. Each direction animates only
-        // the page, so the tab underneath stays still.
+        // Pushed pages rise over the tab and sink back on close. Each direction animates only the
+        // page, so whatever is underneath stays still.
+        AnimatedContent(
+            targetState = openCategory,
+            contentKey = { it?.id },
+            modifier = Modifier.fillMaxSize(),
+            transitionSpec = { pageTransition() },
+            label = "category",
+        ) { category ->
+            if (category != null) {
+                CategoryScreen(
+                    categoryId = category.id,
+                    name = category.name,
+                    contentPadding = contentPadding,
+                    onAppClick = onAppClick,
+                )
+            }
+        }
+
         AnimatedContent(
             targetState = openApp?.packageName,
             modifier = Modifier.fillMaxSize(),
-            transitionSpec = {
-                val slide = tween<IntOffset>(PAGE_TRANSITION_MS, easing = EmphasizedEasing)
-                if (targetState != null) {
-                    (fadeIn(tween(PAGE_TRANSITION_MS)) + slideInVertically(slide) { it / 10 }) togetherWith
-                        ExitTransition.None
-                } else {
-                    EnterTransition.None togetherWith
-                        (fadeOut(tween(PAGE_TRANSITION_MS)) + slideOutVertically(slide) { it / 10 })
-                } using null
-            },
+            transitionSpec = { pageTransition() },
             label = "appDetail",
         ) { packageName ->
             if (packageName != null) {
@@ -210,8 +259,8 @@ fun MainScreen() {
         )
 
         AnimatedContent(
-            targetState = openApp,
-            contentKey = { it != null },
+            targetState = backTarget,
+            contentKey = { it?.key },
             contentAlignment = Alignment.BottomCenter,
             transitionSpec = {
                 (fadeIn(tween(PAGE_TRANSITION_MS)) + scaleIn(initialScale = 0.9f)) togetherWith
@@ -224,7 +273,7 @@ fun MainScreen() {
             label = "bottomBar",
         ) { target ->
             if (target != null) {
-                DetailBackBar(title = target.name, onBack = { openApp = null })
+                DetailBackBar(title = target.title, onBack = goBack)
             } else {
                 ExpressiveNavBar(
                     items = tabs.map { NavBarItem(stringResource(it.labelRes), it.icon) },

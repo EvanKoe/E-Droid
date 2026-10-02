@@ -54,6 +54,8 @@ data class AppVersion(
     val versionCode: Long,
     val added: Long,
     val apkUrl: String,
+    /** Hex sha256 of the APK, checked before it is handed to the system installer. */
+    val sha256: String,
     val sizeBytes: Long?,
     val minSdk: Int?,
     val whatsNew: String?,
@@ -65,6 +67,7 @@ data class AppVersion(
             versionCode = v.versionCode,
             added = v.added,
             apkUrl = repo.resolve(v.file),
+            sha256 = v.file.sha256,
             sizeBytes = v.file.size,
             minSdk = v.manifest.usesSdk?.minSdkVersion,
             whatsNew = v.whatsNew.localized(locale)?.trim()?.takeIf { it.isNotEmpty() },

@@ -6,6 +6,7 @@ import app.edroid.data.fdroid.FDroidRepository
 import app.edroid.data.fdroid.model.Repository
 import app.edroid.data.fdroid.net.FDroidRepoService
 import app.edroid.data.fdroid.parser.IndexV2StreamParser
+import app.edroid.data.install.ApkInstaller
 import okhttp3.OkHttpClient
 import java.util.concurrent.TimeUnit
 
@@ -24,6 +25,8 @@ class AppContainer(context: Context) {
     private val repoService = FDroidRepoService(okHttpClient, json, tempDir = context.cacheDir.resolve("entry"))
 
     val recentSearches = RecentSearchesStore(context, json)
+
+    val apkInstaller = ApkInstaller(context, okHttpClient)
 
     val fdroidRepository = FDroidRepository(
         repo = Repository.FDROID,

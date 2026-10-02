@@ -18,9 +18,6 @@ import kotlinx.coroutines.flow.update
 
 data class SearchUiState(
     val query: String = "",
-    /** Selected category id, or null. */
-    val selectedCategory: String? = null,
-    val selectedCategoryName: String? = null,
     val recentSearches: List<String> = emptyList(),
     /** Category id → display name, sorted by name. */
     val categories: List<Pair<String, String>> = emptyList(),
@@ -28,7 +25,7 @@ data class SearchUiState(
     val indexReady: Boolean = false,
 ) {
     /** True when the user is actively filtering and results should replace the browse view. */
-    val showResults: Boolean get() = query.isNotBlank() || selectedCategory != null
+    val showResults: Boolean get() = query.isNotBlank()
 }
 
 class SearchViewModel(
@@ -37,24 +34,13 @@ class SearchViewModel(
 ) : ViewModel() {
 
     private val query = MutableStateFlow("")
-    private val selectedCategory = MutableStateFlow<String?>(null)
 
     val uiState: StateFlow<SearchUiState> =
-        combine(repository.snapshot, query, selectedCategory, recentSearches.recent) { snapshot, q, cat, recent ->
-            val all = snapshot?.apps.orEmpty()
+        combine(repository.snapshot, query, recentSearches.recent) { snapshot, q, recent ->
             val needle = q.trim()
-            val results = if (needle.isEmpty() && cat == null) {
-                emptyList()
-            } else {
-                all.asSequence()
-                    .filter { cat == null || cat in it.categories }
-                    .filter { needle.isEmpty() || it.matches(needle) }
-                    .toList()
-            }
+            val results = if (needle.isEmpty()) emptyList() else snapshot?.apps.orEmpty().filter { it.matches(needle) }
             SearchUiState(
                 query = q,
-                selectedCategory = cat,
-                selectedCategoryName = cat?.let { snapshot?.repo?.categories?.get(it) ?: it },
                 recentSearches = recent,
                 categories = snapshot?.repo?.categories?.toList()?.sortedBy { it.second }.orEmpty(),
                 results = results,
@@ -74,8 +60,6 @@ class SearchViewModel(
     }
 
     fun onRemoveRecent(value: String) = recentSearches.remove(value)
-
-    fun onCategorySelected(id: String?) = selectedCategory.update { id }
 
     fun clearQuery() = query.update { "" }
 

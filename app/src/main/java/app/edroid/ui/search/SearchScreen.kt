@@ -25,7 +25,6 @@ import androidx.compose.material.icons.rounded.Clear
 import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -40,6 +39,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
@@ -47,6 +47,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -63,19 +64,21 @@ import app.edroid.ui.theme.groupedShapeAt
 
 /**
  * Search tab: page heading, a search field, then either the browse view (recent searches +
- * categories) or, once the user types or picks a category, the matching apps.
+ * categories) or, once the user types, the matching apps.
  *
  * @param contentPadding insets handed down by `MainScreen` so content clears both scrims.
  * @param focusRequest a counter `MainScreen` bumps when the Search tab is re-tapped while already
  *   selected; every change (other than the initial 0) focuses the search field and opens the
  *   keyboard.
  * @param onAppClick opens an app's detail page.
+ * @param onCategoryClick opens a category's page, given its id and display name.
  */
 @Composable
 fun SearchScreen(
     contentPadding: PaddingValues,
     focusRequest: Int = 0,
     onAppClick: (App) -> Unit,
+    onCategoryClick: (id: String, name: String) -> Unit,
     viewModel: SearchViewModel = viewModel(factory = SearchViewModel.Factory),
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
@@ -90,8 +93,9 @@ fun SearchScreen(
     }
 
     // The heading and field stay put; only the list below them scrolls, so the lists get the
-    // bottom clearance while the column takes the top and side insets.
-    val listPadding = PaddingValues(top = 4.dp, bottom = contentPadding.calculateBottomPadding())
+    // bottom clearance while the column takes the top and side insets. The list starts below the
+    // field scrim at rest, the same way `MainScreen` keeps content clear of its top scrim.
+    val listPadding = PaddingValues(top = FieldScrimHeight, bottom = contentPadding.calculateBottomPadding())
 
     Column(
         modifier = Modifier
@@ -114,26 +118,42 @@ fun SearchScreen(
             onClear = viewModel::clearQuery,
             modifier = Modifier.focusRequester(fieldFocus),
         )
-        Spacer(Modifier.height(8.dp))
 
-        if (state.showResults) {
-            ResultsList(
-                state,
-                listPadding,
-                onClearCategory = { viewModel.onCategorySelected(null) },
-                onAppClick = onAppClick,
-            )
-        } else {
-            BrowseList(
-                state = state,
-                contentPadding = listPadding,
-                onRecentSelected = viewModel::onRecentSelected,
-                onRemoveRecent = viewModel::onRemoveRecent,
-                onCategorySelected = viewModel::onCategorySelected,
+        Box(Modifier.weight(1f).fillMaxWidth()) {
+            if (state.showResults) {
+                ResultsList(state, listPadding, onAppClick = onAppClick)
+            } else {
+                BrowseList(
+                    state = state,
+                    contentPadding = listPadding,
+                    onRecentSelected = viewModel::onRecentSelected,
+                    onRemoveRecent = viewModel::onRemoveRecent,
+                    onCategorySelected = onCategoryClick,
+                )
+            }
+
+            // Like `MainScreen`'s top scrim, but under the field: scrolled rows fade out beneath
+            // it instead of being cut off at its edge.
+            val surface = Layering.page
+            Box(
+                modifier = Modifier
+                    .align(Alignment.TopCenter)
+                    .fillMaxWidth()
+                    .height(FieldScrimHeight)
+                    .background(
+                        Brush.verticalGradient(
+                            0f to surface,
+                            0.3f to surface.copy(alpha = 0.7f),
+                            1f to Color.Transparent,
+                        ),
+                    ),
             )
         }
     }
 }
+
+/** Height of the fade under the search field, which is also the list's top padding at rest. */
+private val FieldScrimHeight: Dp = 16.dp
 
 @Composable
 private fun SearchField(
@@ -177,7 +197,7 @@ private fun BrowseList(
     contentPadding: PaddingValues,
     onRecentSelected: (String) -> Unit,
     onRemoveRecent: (String) -> Unit,
-    onCategorySelected: (String) -> Unit,
+    onCategorySelected: (id: String, name: String) -> Unit,
 ) {
     LazyColumn(
         contentPadding = contentPadding,
@@ -209,7 +229,7 @@ private fun BrowseList(
                             id = id,
                             name = name,
                             shape = gridGroupedShapeAt(rowStart + i, count, CategoryColumns),
-                            onClick = { onCategorySelected(id) },
+                            onClick = { onCategorySelected(id, name) },
                             modifier = Modifier.weight(1f).fillMaxHeight(),
                         )
                     }
@@ -233,20 +253,9 @@ private fun BrowseList(
 private fun ResultsList(
     state: SearchUiState,
     contentPadding: PaddingValues,
-    onClearCategory: () -> Unit,
     onAppClick: (App) -> Unit,
 ) {
     Column(Modifier.fillMaxSize()) {
-        state.selectedCategoryName?.let { name ->
-            FilterChip(
-                selected = true,
-                onClick = onClearCategory,
-                label = { Text(name) },
-                trailingIcon = {
-                    Icon(Icons.Rounded.Clear, contentDescription = stringResource(R.string.action_clear), modifier = Modifier.width(18.dp))
-                },
-            )
-        }
         if (state.results.isEmpty()) {
             Box(Modifier.fillMaxSize().padding(bottom = contentPadding.calculateBottomPadding()), contentAlignment = Alignment.Center) {
                 Text(
