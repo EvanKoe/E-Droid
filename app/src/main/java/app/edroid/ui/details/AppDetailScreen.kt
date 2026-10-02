@@ -27,6 +27,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -42,8 +43,6 @@ import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.lazy.LazyRow
-import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.rememberScrollState
@@ -68,6 +67,8 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.carousel.HorizontalMultiBrowseCarousel
+import androidx.compose.material3.carousel.rememberCarouselState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -81,7 +82,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.Layout
 import androidx.compose.ui.platform.LocalContext
@@ -110,11 +110,9 @@ import app.edroid.data.install.requestUninstall
 import app.edroid.ui.components.PageTitle
 import app.edroid.ui.components.SectionTitle
 import app.edroid.ui.components.relativeTime
-import app.edroid.ui.theme.GroupedItemSpacing
 import app.edroid.ui.theme.GroupedOuterRadius
 import app.edroid.ui.theme.Layering
 import app.edroid.ui.theme.PageHorizontalPadding
-import app.edroid.ui.theme.horizontalGroupedShapeAt
 import coil3.compose.AsyncImage
 import kotlinx.coroutines.CancellationException
 
@@ -123,8 +121,10 @@ private const val BANNER_ASPECT = 1024f / 500f
 private val IconTileSize = 96.dp
 /** How far the icon tile reaches up into the banner. */
 private val IconOverlap = 32.dp
-private val MediaTileWidth = 132.dp
-private val MediaTileHeight = 264.dp
+/** Width of the large carousel item; the medium and small ones are derived from it. */
+private val MediaPreferredWidth = 200.dp
+private val MediaHeight = 300.dp
+private val MediaItemSpacing = 8.dp
 private const val DESCRIPTION_COLLAPSED_LINES = 6
 
 /** The heavy part of the page, read from the on-disk index after the screen opens. */
@@ -620,62 +620,48 @@ private fun MediaStrip(state: DetailsState, onScreenshot: (Int) -> Unit, onVideo
 
     val count = if (loading) 3 else shots.size + (if (video != null) 1 else 0)
     val offset = if (video != null) 1 else 0
-    LazyRow(
-        contentPadding = PaddingValues(horizontal = PageHorizontalPadding),
-        horizontalArrangement = Arrangement.spacedBy(GroupedItemSpacing),
+    val shape = RoundedCornerShape(GroupedOuterRadius)
+    HorizontalMultiBrowseCarousel(
+        state = rememberCarouselState { count },
+        preferredItemWidth = MediaPreferredWidth,
+        itemSpacing = MediaItemSpacing,
         userScrollEnabled = !loading,
-    ) {
-        if (loading) {
-            items(count) { index -> MediaTile(shape = horizontalGroupedShapeAt(index, count)) }
-            return@LazyRow
-        }
-        if (video != null) {
-            item(key = "video") {
-                MediaTile(shape = horizontalGroupedShapeAt(0, count), onClick = { onVideo(video) }) {
-                    Column(
-                        modifier = Modifier.fillMaxSize(),
-                        verticalArrangement = Arrangement.Center,
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                    ) {
-                        Icon(
-                            Icons.Rounded.PlayArrow,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.size(48.dp),
-                        )
-                        Text(
-                            stringResource(R.string.details_video),
-                            style = MaterialTheme.typography.labelLarge,
-                            color = MaterialTheme.colorScheme.primary,
-                        )
-                    }
-                }
+        // Padding outside the carousel rather than contentPadding, so items clip at the margin.
+        modifier = Modifier.padding(horizontal = PageHorizontalPadding).fillMaxWidth().height(MediaHeight),
+    ) { index ->
+        // maskClip lets the carousel morph each item's visible width as it moves between sizes.
+        val tile = Modifier.fillMaxSize().maskClip(shape).background(Layering.item)
+        when {
+            loading -> Box(tile)
+            video != null && index == 0 -> Column(
+                modifier = tile.clickable { onVideo(video) },
+                verticalArrangement = Arrangement.Center,
+                horizontalAlignment = Alignment.CenterHorizontally,
+            ) {
+                Icon(
+                    Icons.Rounded.PlayArrow,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(48.dp),
+                )
+                Text(
+                    stringResource(R.string.details_video),
+                    style = MaterialTheme.typography.labelLarge,
+                    color = MaterialTheme.colorScheme.primary,
+                    maxLines = 1,
+                    softWrap = false,
+                )
             }
-        }
-        itemsIndexed(shots, key = { _, url -> url }) { index, url ->
-            MediaTile(shape = horizontalGroupedShapeAt(index + offset, count), onClick = { onScreenshot(index) }) {
+            else -> {
+                val shot = index - offset
                 AsyncImage(
-                    model = url,
-                    contentDescription = stringResource(R.string.details_screenshot, index + 1),
+                    model = shots[shot],
+                    contentDescription = stringResource(R.string.details_screenshot, shot + 1),
                     contentScale = ContentScale.Crop,
-                    modifier = Modifier.fillMaxSize(),
+                    modifier = tile.clickable { onScreenshot(shot) },
                 )
             }
         }
-    }
-}
-
-@Composable
-private fun MediaTile(
-    shape: Shape,
-    onClick: (() -> Unit)? = null,
-    content: @Composable () -> Unit = {},
-) {
-    val size = Modifier.size(width = MediaTileWidth, height = MediaTileHeight)
-    if (onClick != null) {
-        Surface(onClick = onClick, shape = shape, color = Layering.item, modifier = size, content = content)
-    } else {
-        Surface(shape = shape, color = Layering.item, modifier = size, content = content)
     }
 }
 
