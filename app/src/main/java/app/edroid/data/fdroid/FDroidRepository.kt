@@ -1,7 +1,9 @@
 package app.edroid.data.fdroid
 
 import android.util.Log
+import android.util.LruCache
 import app.edroid.data.fdroid.model.App
+import app.edroid.data.fdroid.model.AppDetails
 import app.edroid.data.fdroid.model.Entry
 import app.edroid.data.fdroid.model.PackageV2
 import app.edroid.data.fdroid.model.RepoV2
@@ -11,6 +13,7 @@ import app.edroid.data.fdroid.net.FDroidRepoService
 import app.edroid.data.fdroid.parser.IndexV2StreamParser
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -77,6 +80,7 @@ class FDroidRepository(
     val sync: StateFlow<SyncState> = _sync.asStateFlow()
 
     private val refreshMutex = Mutex()
+    private val detailsCache = LruCache<String, AppDetails>(DETAILS_CACHE_SIZE)
     private val repoDir get() = File(storageDir, "repos/${repo.id}")
     private val indexFile get() = File(repoDir, "index-v2.json")
     private val metaFile get() = File(repoDir, "meta.json")
@@ -132,6 +136,7 @@ class FDroidRepository(
                     )
                 }
                 writeCacheMeta(CacheMeta(entry.timestamp, System.currentTimeMillis(), entry.index.numPackages))
+                detailsCache.evictAll()
             }
 
             if (needsDownload || _snapshot.value == null) {
@@ -145,6 +150,26 @@ class FDroidRepository(
         } catch (e: Exception) {
             Log.e(TAG, "Refresh failed for ${repo.address}", e)
             _sync.value = SyncState.Error(e.message ?: e.javaClass.simpleName, e)
+        }
+    }
+
+    /** The row for [packageName] in the current snapshot, if one is loaded. */
+    fun app(packageName: String): App? = _snapshot.value?.apps?.firstOrNull { it.packageName == packageName }
+
+    /**
+     * Full details for one package, re-read from the on-disk index since the in-memory [App] rows
+     * drop descriptions, media and older versions. Recently opened packages are kept in memory.
+     * Returns null when the index doesn't list the package.
+     */
+    suspend fun details(packageName: String): AppDetails? {
+        detailsCache.get(packageName)?.let { return it }
+        return withContext(Dispatchers.IO) {
+            // A refresh swaps the file by rename, so a scan already running keeps reading the old one.
+            check(indexFile.exists()) { "Package index not downloaded yet" }
+            val pkg = indexFile.inputStream().buffered(256 * 1024).use { input ->
+                parser.findPackage(input, packageName) { ensureActive() }
+            }
+            pkg?.let { AppDetails.from(packageName, it, repo) }?.also { detailsCache.put(packageName, it) }
         }
     }
 
@@ -250,5 +275,6 @@ class FDroidRepository(
     companion object {
         private const val TAG = "FDroidRepository"
         private const val APPS_CACHE_VERSION = 1
+        private const val DETAILS_CACHE_SIZE = 16
     }
 }

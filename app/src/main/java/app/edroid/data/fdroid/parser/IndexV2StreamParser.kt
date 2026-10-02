@@ -48,6 +48,33 @@ class IndexV2StreamParser(
         }
     }
 
+    /**
+     * Returns the package named [packageName], or null if the index doesn't list it. Every other
+     * package is skipped without being copied or decoded, so this is one cheap sequential scan.
+     * [checkCancelled] runs between packages and may throw to abort the scan.
+     */
+    fun findPackage(input: InputStream, packageName: String, checkCancelled: () -> Unit = {}): PackageV2? {
+        JsonReader(InputStreamReader(input, Charsets.UTF_8)).use { reader ->
+            reader.beginObject()
+            while (reader.hasNext()) {
+                if (reader.nextName() != "packages") {
+                    reader.skipValue()
+                    continue
+                }
+                reader.beginObject()
+                while (reader.hasNext()) {
+                    checkCancelled()
+                    if (reader.nextName() == packageName) {
+                        return json.decodeFromString(PackageV2.serializer(), reader.readSubtree())
+                    }
+                    reader.skipValue()
+                }
+                return null
+            }
+        }
+        return null
+    }
+
     /** Copies the value at the reader's position into a JSON string. */
     private fun JsonReader.readSubtree(): String {
         val out = StringWriter()

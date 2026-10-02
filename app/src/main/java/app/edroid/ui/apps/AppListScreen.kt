@@ -48,6 +48,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import app.edroid.R
 import app.edroid.data.fdroid.SyncState
+import app.edroid.data.fdroid.model.App
 import app.edroid.ui.components.AppCard
 import app.edroid.ui.components.PageTitle
 import app.edroid.ui.components.relativeTime
@@ -63,10 +64,12 @@ import app.edroid.ui.theme.groupedShapeAt
  * error row) above the list; the full-size loading and error views appear only on a cold start.
  *
  * @param contentPadding insets handed down by `MainScreen` so content clears both scrims.
+ * @param onAppClick opens an app's detail page.
  */
 @Composable
 fun AppListScreen(
     contentPadding: PaddingValues,
+    onAppClick: (App) -> Unit,
     viewModel: AppListViewModel = viewModel(factory = AppListViewModel.Factory),
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
@@ -136,7 +139,7 @@ fun AppListScreen(
                     }
                     SyncState.Idle -> Unit
                 }
-                appItems(state.apps)
+                appItems(state.apps, onAppClick)
             } else {
                 when (sync) {
                     is SyncState.Loading -> item(key = "loading") {
@@ -309,7 +312,7 @@ private fun ErrorContent(message: String, modifier: Modifier = Modifier, onRetry
 }
 
 /** The grouped app cards, or an empty-state line when the filter matches nothing. */
-private fun LazyListScope.appItems(apps: List<app.edroid.data.fdroid.model.App>) {
+private fun LazyListScope.appItems(apps: List<App>, onAppClick: (App) -> Unit) {
     if (apps.isEmpty()) {
         item(key = "empty") {
             Box(
@@ -326,6 +329,7 @@ private fun LazyListScope.appItems(apps: List<app.edroid.data.fdroid.model.App>)
             app,
             shape = groupedShapeAt(index, apps.size),
             modifier = animateListItem().padding(horizontal = PageHorizontalPadding),
+            onClick = { onAppClick(app) },
         )
     }
 }

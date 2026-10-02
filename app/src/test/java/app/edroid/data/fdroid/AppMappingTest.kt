@@ -1,6 +1,7 @@
 package app.edroid.data.fdroid
 
 import app.edroid.data.fdroid.model.App
+import app.edroid.data.fdroid.model.AppDetails
 import app.edroid.data.fdroid.model.Entry
 import app.edroid.data.fdroid.model.PackageV2
 import app.edroid.data.fdroid.model.Repository
@@ -64,6 +65,47 @@ class AppMappingTest {
 
         val fr = App.from("org.example", pkg, repo, Locale.FRANCE)
         assertEquals("Example", fr.name)
+    }
+
+    @Test
+    fun `package maps to details with media fallbacks and signed versions newest first`() {
+        val pkg = json.decodeFromString(
+            PackageV2.serializer(),
+            """
+            {"metadata":{
+               "description":{"en-US":"  <p>Does things.</p>  "},
+               "added":1000,"lastUpdated":2000,"preferredSigner":"aaaa",
+               "promoGraphic":{"en-US":{"name":"/org.example/en-US/promo.png"}},
+               "video":{"en-US":"https://example.org/video"},
+               "screenshots":{"tenInch":{"en-US":[{"name":"/org.example/en-US/tenInch/1.png"}]}}
+             },
+             "versions":{
+               "v1":{"added":1,"file":{"name":"/org.example_1.apk","sha256":"11","size":100},
+                     "manifest":{"versionName":"1.0","versionCode":1,"usesSdk":{"minSdkVersion":21,"targetSdkVersion":34},
+                                 "signer":{"sha256":["aaaa"]}}},
+               "v3":{"added":3,"file":{"name":"/org.example_3.apk","sha256":"33"},
+                     "manifest":{"versionName":"3.0","versionCode":3,"signer":{"sha256":["aaaa"]}},
+                     "whatsNew":{"en-US":"Fixes\n"},"antiFeatures":{"Ads":{}}},
+               "v2":{"added":2,"file":{"name":"/org.example_2.apk","sha256":"22"},
+                     "manifest":{"versionName":"2.0","versionCode":2,"signer":{"sha256":["bbbb"]}}}
+             }}
+            """.trimIndent(),
+        )
+
+        val details = AppDetails.from("org.example", pkg, Repository.FDROID, Locale.US)
+        assertEquals("<p>Does things.</p>", details.description)
+        // No feature graphic: the promo graphic stands in; no phone shots: tablet ones are used.
+        assertEquals("https://f-droid.org/repo/org.example/en-US/promo.png", details.bannerUrl)
+        assertEquals(listOf("https://f-droid.org/repo/org.example/en-US/tenInch/1.png"), details.screenshotUrls)
+        assertEquals("https://example.org/video", details.videoUrl)
+        // Version 2 has another signer and is left out.
+        assertEquals(listOf("3.0", "1.0"), details.versions.map { it.versionName })
+        val latest = details.versions.first()
+        assertEquals("Fixes", latest.whatsNew)
+        assertEquals(setOf("Ads"), latest.antiFeatures)
+        assertEquals("https://f-droid.org/repo/org.example_3.apk", latest.apkUrl)
+        assertEquals(21, details.versions[1].minSdk)
+        assertEquals(100L, details.versions[1].sizeBytes)
     }
 
     @Test

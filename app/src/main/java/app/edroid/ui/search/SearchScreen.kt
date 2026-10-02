@@ -46,6 +46,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import app.edroid.R
+import app.edroid.data.fdroid.model.App
 import app.edroid.ui.components.AppCard
 import app.edroid.ui.components.PageTitle
 import app.edroid.ui.components.SectionTitle
@@ -62,11 +63,13 @@ import app.edroid.ui.theme.groupedShapeAt
  * @param focusRequest a counter `MainScreen` bumps when the Search tab is re-tapped while already
  *   selected; every change (other than the initial 0) focuses the search field and opens the
  *   keyboard.
+ * @param onAppClick opens an app's detail page.
  */
 @Composable
 fun SearchScreen(
     contentPadding: PaddingValues,
     focusRequest: Int = 0,
+    onAppClick: (App) -> Unit,
     viewModel: SearchViewModel = viewModel(factory = SearchViewModel.Factory),
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
@@ -108,7 +111,12 @@ fun SearchScreen(
         Spacer(Modifier.height(8.dp))
 
         if (state.showResults) {
-            ResultsList(state, listPadding, onClearCategory = { viewModel.onCategorySelected(null) })
+            ResultsList(
+                state,
+                listPadding,
+                onClearCategory = { viewModel.onCategorySelected(null) },
+                onAppClick = onAppClick,
+            )
         } else {
             BrowseList(
                 state = state,
@@ -208,6 +216,7 @@ private fun ResultsList(
     state: SearchUiState,
     contentPadding: PaddingValues,
     onClearCategory: () -> Unit,
+    onAppClick: (App) -> Unit,
 ) {
     Column(Modifier.fillMaxSize()) {
         state.selectedCategoryName?.let { name ->
@@ -234,7 +243,7 @@ private fun ResultsList(
             verticalArrangement = Arrangement.spacedBy(GroupedItemSpacing),
         ) {
             itemsIndexed(state.results, key = { _, app -> app.packageName }) { index, app ->
-                AppCard(app, shape = groupedShapeAt(index, state.results.size))
+                AppCard(app, shape = groupedShapeAt(index, state.results.size), onClick = { onAppClick(app) })
             }
         }
     }

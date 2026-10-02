@@ -22,4 +22,19 @@
     <string name="loading_parsing">Reading packages…</string>
     <string name="error_title">Couldn\'t load the repository</string>
     <string name="empty_results">No apps match your search</string>
+    <string name="action_back">Back</string>
+    <string name="action_install">Install</string>
+    <string name="details_version_updated">Version %1$s · updated %2$s</string>
+    <string name="details_show_more">Show more</string>
+    <string name="details_show_less">Show less</string>
+    <string name="details_loading">Loading details…</string>
+    <string name="details_not_found">This app is no longer in the repository index</string>
+    <string name="details_error">Couldn\'t load details: %1$s</string>
+    <string name="details_version_latest">Latest - v%1$s</string>
+    <string name="details_version">v%1$s</string>
+    <string name="details_whats_new">What\'s new</string>
+    <string name="details_min_sdk">Requires Android API %1$d</string>
+    <string name="details_anti_features">Anti-features: %1$s</string>
+    <string name="details_screenshot">Screenshot %1$d</string>
+    <string name="details_video">Watch video</string>
 </resources>

@@ -1,10 +1,17 @@
 package app.edroid.ui
 
+import androidx.activity.compose.BackHandler
 import androidx.annotation.StringRes
 import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.EnterTransition
+import androidx.compose.animation.ExitTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
@@ -25,7 +32,9 @@ import androidx.compose.material.icons.rounded.Settings
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.Saver
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -34,12 +43,19 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import app.edroid.R
+import app.edroid.data.fdroid.model.App
 import app.edroid.ui.apps.AppListScreen
+import app.edroid.ui.details.AppDetailScreen
+import app.edroid.ui.details.DetailBackBar
+import app.edroid.ui.components.EmphasizedEasing
 import app.edroid.ui.components.ExpressiveNavBar
 import app.edroid.ui.components.NavBarItem
 import app.edroid.ui.options.OptionsScreen
@@ -68,9 +84,20 @@ private val TopScrimExtent: Dp = 40.dp
 
 private const val PAGE_TRANSITION_MS = 300
 
+/** The app whose detail page is open; its name labels the back bar before the page loads. */
+private data class OpenApp(val packageName: String, val name: String)
+
+private val OpenAppSaver = Saver<OpenApp?, List<String>>(
+    save = { it?.let { listOf(it.packageName, it.name) } },
+    restore = { OpenApp(it[0], it[1]) },
+)
+
 /**
  * Root of the in-app UI: the current tab's content between a top and a bottom scrim, and a
  * floating expressive navigation bar switching between Home, Search and Options.
+ *
+ * Tapping an app opens its detail page on top of the tab, which stays composed underneath so its
+ * scroll position survives; the nav bar gives way to a back bar until the page is closed.
  *
  * No tab has an app bar: each page carries its own heading as scrolling content (see
  * `PageTitle`), so a bar would only waste height at the top. A scrim mirroring the bottom one
@@ -84,9 +111,18 @@ fun MainScreen() {
     // its field whenever this changes. Reset on every tab change so returning to Search later
     // doesn't replay a stale request.
     var searchFocusRequest by remember { mutableIntStateOf(0) }
+    var openApp by rememberSaveable(stateSaver = OpenAppSaver) { mutableStateOf<OpenApp?>(null) }
     val tabs = HomeTab.entries
     val current = tabs[selectedIndex.coerceIn(0, tabs.lastIndex)]
     val haptics = LocalHapticFeedback.current
+    val focusManager = LocalFocusManager.current
+    val keyboard = LocalSoftwareKeyboardController.current
+    val onAppClick: (App) -> Unit = { app ->
+        focusManager.clearFocus()
+        keyboard?.hide()
+        openApp = OpenApp(app.packageName, app.name)
+    }
+    BackHandler(enabled = openApp != null) { openApp = null }
     val surface = Layering.page
 
     val navBarBottomInset = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
@@ -110,12 +146,35 @@ fun MainScreen() {
             label = "homeTab",
         ) { tab ->
             when (tab) {
-                HomeTab.Home -> AppListScreen(contentPadding = contentPadding)
+                HomeTab.Home -> AppListScreen(contentPadding = contentPadding, onAppClick = onAppClick)
                 HomeTab.Search -> SearchScreen(
                     contentPadding = contentPadding,
                     focusRequest = searchFocusRequest,
+                    onAppClick = onAppClick,
                 )
                 HomeTab.Options -> OptionsScreen(contentPadding = contentPadding)
+            }
+        }
+
+        // The detail page rises over the tab and sinks back on close. Each direction animates only
+        // the page, so the tab underneath stays still.
+        AnimatedContent(
+            targetState = openApp?.packageName,
+            modifier = Modifier.fillMaxSize(),
+            transitionSpec = {
+                val slide = tween<IntOffset>(PAGE_TRANSITION_MS, easing = EmphasizedEasing)
+                if (targetState != null) {
+                    (fadeIn(tween(PAGE_TRANSITION_MS)) + slideInVertically(slide) { it / 10 }) togetherWith
+                        ExitTransition.None
+                } else {
+                    EnterTransition.None togetherWith
+                        (fadeOut(tween(PAGE_TRANSITION_MS)) + slideOutVertically(slide) { it / 10 })
+                } using null
+            },
+            label = "appDetail",
+        ) { packageName ->
+            if (packageName != null) {
+                AppDetailScreen(packageName = packageName, contentPadding = contentPadding)
             }
         }
 
@@ -150,22 +209,37 @@ fun MainScreen() {
                 ),
         )
 
-        ExpressiveNavBar(
-            items = tabs.map { NavBarItem(stringResource(it.labelRes), it.icon) },
-            selectedIndex = selectedIndex,
-            onSelect = { index ->
-                if (index != selectedIndex) {
-                    haptics.performHapticFeedback(HapticFeedbackType.LongPress)
-                    searchFocusRequest = 0
-                    selectedIndex = index
-                } else if (tabs[index] == HomeTab.Search) {
-                    searchFocusRequest++
-                }
+        AnimatedContent(
+            targetState = openApp,
+            contentKey = { it != null },
+            contentAlignment = Alignment.BottomCenter,
+            transitionSpec = {
+                (fadeIn(tween(PAGE_TRANSITION_MS)) + scaleIn(initialScale = 0.9f)) togetherWith
+                    (fadeOut(tween(PAGE_TRANSITION_MS / 2)) + scaleOut(targetScale = 0.9f))
             },
             modifier = Modifier
                 .align(Alignment.BottomCenter)
                 .navigationBarsPadding()
                 .padding(bottom = 16.dp),
-        )
+            label = "bottomBar",
+        ) { target ->
+            if (target != null) {
+                DetailBackBar(title = target.name, onBack = { openApp = null })
+            } else {
+                ExpressiveNavBar(
+                    items = tabs.map { NavBarItem(stringResource(it.labelRes), it.icon) },
+                    selectedIndex = selectedIndex,
+                    onSelect = { index ->
+                        if (index != selectedIndex) {
+                            haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                            searchFocusRequest = 0
+                            selectedIndex = index
+                        } else if (tabs[index] == HomeTab.Search) {
+                            searchFocusRequest++
+                        }
+                    },
+                )
+            }
+        }
     }
 }

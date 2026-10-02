@@ -35,5 +35,12 @@ fun groupedShape(isFirst: Boolean = false, isLast: Boolean = false) = RoundedCor
 fun groupedShapeAt(index: Int, count: Int) =
     groupedShape(isFirst = index == 0, isLast = index == count - 1)
 
+/** [groupedShapeAt] for a horizontal row: outer radius on the row's start and end edges. */
+fun horizontalGroupedShapeAt(index: Int, count: Int): RoundedCornerShape {
+    val start = if (index == 0) GroupedOuterRadius else GroupedInnerRadius
+    val end = if (index == count - 1) GroupedOuterRadius else GroupedInnerRadius
+    return RoundedCornerShape(topStart = start, bottomStart = start, topEnd = end, bottomEnd = end)
+}
+
 /** Horizontal inset between a page's content and the screen edge. */
 val PageHorizontalPadding: Dp = 16.dp
