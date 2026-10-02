@@ -1,6 +1,11 @@
 package app.edroid.ui.options
 
+import android.content.Intent
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -11,10 +16,13 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowRight
+import androidx.compose.material.icons.rounded.Coffee
 import androidx.compose.material.icons.rounded.Security
+import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
@@ -24,10 +32,17 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Shape
+import androidx.compose.ui.graphics.painter.Painter
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.core.net.toUri
 import app.edroid.R
 import app.edroid.ui.components.PageTitle
 import app.edroid.ui.components.SectionTitle
@@ -42,6 +57,14 @@ import app.edroid.ui.theme.groupedShape
  */
 @Composable
 fun OptionsScreen(contentPadding: PaddingValues, onPermissionsClick: () -> Unit) {
+    val context = LocalContext.current
+    val openUrl = { url: String ->
+        context.startActivity(Intent(Intent.ACTION_VIEW, url.toUri()).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+    }
+    val githubUrl = stringResource(R.string.dev_card_github_url)
+    val coffeeUrl = stringResource(R.string.dev_card_coffee_url)
+    val linkedInUrl = stringResource(R.string.dev_card_linkedin_url)
+
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -56,6 +79,13 @@ fun OptionsScreen(contentPadding: PaddingValues, onPermissionsClick: () -> Unit)
             summary = stringResource(R.string.options_permissions_summary),
             shape = groupedShape(isFirst = true, isLast = true),
             onClick = onPermissionsClick,
+        )
+        SectionTitle(stringResource(R.string.options_about))
+        DevCard(
+            shape = groupedShape(isFirst = true, isLast = true),
+            onOpenGitHub = { openUrl(githubUrl) },
+            onOpenCoffee = { openUrl(coffeeUrl) },
+            onOpenLinkedIn = { openUrl(linkedInUrl) },
         )
     }
 }
@@ -99,5 +129,68 @@ private fun OptionItem(
                 tint = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
+    }
+}
+
+/** The "about" card that closes the list: the developer's photo and the links out as filled buttons. */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun DevCard(
+    shape: Shape,
+    onOpenGitHub: () -> Unit,
+    onOpenCoffee: () -> Unit,
+    onOpenLinkedIn: () -> Unit,
+) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = shape,
+        colors = CardDefaults.cardColors(containerColor = Layering.item),
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 20.dp, vertical = 24.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+        ) {
+            Image(
+                painter = painterResource(R.drawable.dev_avatar),
+                contentDescription = stringResource(R.string.dev_card_avatar),
+                contentScale = ContentScale.Crop,
+                modifier = Modifier
+                    .size(112.dp)
+                    .clip(RoundedCornerShape(28.dp)),
+            )
+
+            Text(
+                text = stringResource(R.string.dev_card_author),
+                style = MaterialTheme.typography.bodyLarge,
+                textAlign = TextAlign.Center,
+                modifier = Modifier.padding(vertical = 20.dp),
+            )
+
+            // Wraps to a second line on narrow screens rather than squeezing either label.
+            FlowRow(
+                horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                DevLinkButton(painterResource(R.drawable.ic_github), stringResource(R.string.dev_card_github), onOpenGitHub)
+                Button(onClick = onOpenCoffee) {
+                    Icon(Icons.Rounded.Coffee, contentDescription = null, modifier = Modifier.size(18.dp))
+                    Spacer(Modifier.width(8.dp))
+                    Text(stringResource(R.string.dev_card_coffee))
+                }
+                DevLinkButton(painterResource(R.drawable.ic_linkedin), stringResource(R.string.dev_card_linkedin), onOpenLinkedIn)
+            }
+        }
+    }
+}
+
+/** A filled link button of [DevCard] with a drawable icon ahead of its label. */
+@Composable
+private fun DevLinkButton(icon: Painter,label: String, onClick: () -> Unit) {
+    Button(onClick = onClick) {
+        Icon(icon, contentDescription = null, modifier = Modifier.size(18.dp))
+        Spacer(Modifier.width(8.dp))
+        Text(label)
     }
 }

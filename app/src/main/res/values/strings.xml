@@ -18,6 +18,15 @@
     <string name="options_general">General</string>
     <string name="options_permissions">Permissions</string>
     <string name="options_permissions_summary">What EDroid asks for and why</string>
+    <string name="options_about">About</string>
+    <string name="dev_card_author">Made by Evan Koehler</string>
+    <string name="dev_card_github">View on GitHub</string>
+    <string name="dev_card_coffee">Buy me a coffee</string>
+    <string name="dev_card_linkedin">LinkedIn</string>
+    <string name="dev_card_avatar">Photo of the developer</string>
+    <string name="dev_card_github_url" translatable="false">https://github.com/EvanKoe</string>
+    <string name="dev_card_coffee_url" translatable="false">https://buymeacoffee.com/evankoe</string>
+    <string name="dev_card_linkedin_url" translatable="false">https://www.linkedin.com/in/evan-koehler-it/</string>
     <string name="permissions_title">Permissions</string>
     <string name="permissions_intro">EDroid only asks for what an app store needs. Some permissions are granted when you install EDroid; others are asked the first time a feature needs them, and you can change them any time in system settings.</string>
     <string name="permissions_optional">Optional</string>
