@@ -1,5 +1,6 @@
 package app.edroid.ui.search
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -46,6 +47,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.ImeAction
@@ -87,6 +89,7 @@ fun SearchScreen(
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val keyboard = LocalSoftwareKeyboardController.current
+    val focusManager = LocalFocusManager.current
     val fieldFocus = remember { FocusRequester() }
 
     LaunchedEffect(focusRequest) {
@@ -94,6 +97,12 @@ fun SearchScreen(
             fieldFocus.requestFocus()
             keyboard?.show()
         }
+    }
+
+    // While a query is entered, back clears it (returning to the browse view) instead of leaving.
+    BackHandler(enabled = state.query.isNotEmpty()) {
+        viewModel.clearQuery()
+        focusManager.clearFocus()
     }
 
     // The heading and field stay put; only the list below them scrolls, so the lists get the
