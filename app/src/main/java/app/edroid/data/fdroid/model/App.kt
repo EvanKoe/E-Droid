@@ -1,12 +1,14 @@
 package app.edroid.data.fdroid.model
 
 import java.util.Locale
+import kotlinx.serialization.Serializable
 
 /**
  * Lean, display-ready projection of a [PackageV2]. The full index for f-droid.org is ~60 MB of
  * JSON; keeping every localized description in memory is wasteful, so the streaming parser maps
  * each package into this shape as it goes and drops the raw object.
  */
+@Serializable
 data class App(
     val packageName: String,
     val name: String,

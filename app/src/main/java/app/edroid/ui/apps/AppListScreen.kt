@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.LazyRow
@@ -27,6 +28,7 @@ import androidx.compose.material3.LinearWavyProgressIndicator
 import androidx.compose.material3.LoadingIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
@@ -37,7 +39,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import app.edroid.R
-import app.edroid.data.fdroid.RepoState
+import app.edroid.data.fdroid.SyncState
 import app.edroid.ui.components.AppCard
 import app.edroid.ui.components.PageTitle
 import app.edroid.ui.components.relativeTime
@@ -48,6 +50,9 @@ import app.edroid.ui.theme.groupedShapeAt
 /**
  * Home tab: repository heading, category chips and the grouped list of apps. The heading is the
  * first item of the list so it scrolls away under the top scrim like any other content.
+ *
+ * While an index is already on screen, a refresh only adds a slim progress strip (or a compact
+ * error row) above the list; the full-size loading and error views appear only on a cold start.
  *
  * @param contentPadding insets handed down by `MainScreen` so content clears both scrims.
  */
@@ -82,13 +87,24 @@ fun AppListScreen(
                 )
             }
         }
-        when (val repoState = state.repoState) {
-            is RepoState.Loading -> item(key = "loading") { LoadingContent(repoState) }
-            is RepoState.Error -> item(key = "error") {
-                ErrorContent(repoState.message) { viewModel.refresh(force = true) }
+        val sync = state.sync
+        if (state.hasData) {
+            when (sync) {
+                is SyncState.Loading -> item(key = "sync") { SyncStrip(sync) }
+                is SyncState.Error -> item(key = "sync") {
+                    SyncErrorRow(sync.message) { viewModel.refresh(force = true) }
+                }
+                SyncState.Idle -> Unit
             }
-            is RepoState.Ready -> appItems(state.apps)
-            RepoState.Idle -> Unit
+            appItems(state.apps)
+        } else {
+            when (sync) {
+                is SyncState.Loading -> item(key = "loading") { LoadingContent(sync) }
+                is SyncState.Error -> item(key = "error") {
+                    ErrorContent(sync.message) { viewModel.refresh(force = true) }
+                }
+                SyncState.Idle -> Unit
+            }
         }
     }
 }
@@ -106,11 +122,11 @@ private fun RepoHeader(state: AppListUiState, onRefresh: () -> Unit) {
                 Icon(Icons.Rounded.Refresh, contentDescription = stringResource(R.string.action_refresh))
             }
         }
-        val repoState = state.repoState
-        val subtitle = when {
-            repoState is RepoState.Ready ->
-                stringResource(R.string.subtitle_apps_updated, state.totalApps, relativeTime(repoState.repo.timestamp))
-            else -> stringResource(R.string.subtitle_repo_address)
+        val repo = state.repo
+        val subtitle = if (repo != null) {
+            stringResource(R.string.subtitle_apps_updated, state.totalApps, relativeTime(repo.timestamp))
+        } else {
+            stringResource(R.string.subtitle_repo_address)
         }
         Text(
             subtitle,
@@ -143,20 +159,73 @@ private fun CategoryRow(
     }
 }
 
+private val SyncState.Loading.Phase.label: Int
+    get() = when (this) {
+        SyncState.Loading.Phase.FETCHING_ENTRY -> R.string.loading_entry
+        SyncState.Loading.Phase.DOWNLOADING_INDEX -> R.string.loading_index
+        SyncState.Loading.Phase.PARSING -> R.string.loading_parsing
+    }
+
+/** Slim status line shown above an already-loaded list while a refresh runs. */
 @Composable
-private fun LoadingContent(state: RepoState.Loading) {
+private fun SyncStrip(state: SyncState.Loading) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = PageHorizontalPadding + 12.dp, vertical = 4.dp),
+    ) {
+        Text(
+            stringResource(state.phase.label),
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Spacer(Modifier.height(6.dp))
+        val progress = state.progress
+        if (progress != null) {
+            LinearWavyProgressIndicator(progress = { progress }, modifier = Modifier.fillMaxWidth())
+        } else {
+            LinearWavyProgressIndicator(modifier = Modifier.fillMaxWidth())
+        }
+    }
+}
+
+/** Compact failure notice above an already-loaded list: the cached apps stay usable. */
+@Composable
+private fun SyncErrorRow(message: String, onRetry: () -> Unit) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = PageHorizontalPadding + 12.dp, vertical = 4.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Icon(
+            Icons.Rounded.Warning,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.error,
+            modifier = Modifier.size(20.dp),
+        )
+        Spacer(Modifier.width(8.dp))
+        Text(
+            message,
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.weight(1f),
+        )
+        TextButton(onClick = onRetry) { Text(stringResource(R.string.action_retry)) }
+    }
+}
+
+@Composable
+private fun LoadingContent(state: SyncState.Loading) {
     Column(
         modifier = Modifier.fillMaxWidth().padding(32.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         LoadingIndicator(modifier = Modifier.size(72.dp))
         Spacer(Modifier.height(24.dp))
-        val label = when (state.phase) {
-            RepoState.Loading.Phase.FETCHING_ENTRY -> R.string.loading_entry
-            RepoState.Loading.Phase.DOWNLOADING_INDEX -> R.string.loading_index
-            RepoState.Loading.Phase.PARSING -> R.string.loading_parsing
-        }
-        Text(stringResource(label), style = MaterialTheme.typography.titleMedium)
+        Text(stringResource(state.phase.label), style = MaterialTheme.typography.titleMedium)
         Spacer(Modifier.height(16.dp))
         val progress = state.progress
         if (progress != null) {

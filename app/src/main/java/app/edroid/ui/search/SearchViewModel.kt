@@ -8,7 +8,6 @@ import androidx.lifecycle.viewmodel.viewModelFactory
 import app.edroid.EDroidApp
 import app.edroid.data.RecentSearchesStore
 import app.edroid.data.fdroid.FDroidRepository
-import app.edroid.data.fdroid.RepoState
 import app.edroid.data.fdroid.model.App
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -41,9 +40,8 @@ class SearchViewModel(
     private val selectedCategory = MutableStateFlow<String?>(null)
 
     val uiState: StateFlow<SearchUiState> =
-        combine(repository.state, query, selectedCategory, recentSearches.recent) { repoState, q, cat, recent ->
-            val ready = repoState as? RepoState.Ready
-            val all = ready?.apps.orEmpty()
+        combine(repository.snapshot, query, selectedCategory, recentSearches.recent) { snapshot, q, cat, recent ->
+            val all = snapshot?.apps.orEmpty()
             val needle = q.trim()
             val results = if (needle.isEmpty() && cat == null) {
                 emptyList()
@@ -56,11 +54,11 @@ class SearchViewModel(
             SearchUiState(
                 query = q,
                 selectedCategory = cat,
-                selectedCategoryName = cat?.let { ready?.repo?.categories?.get(it) ?: it },
+                selectedCategoryName = cat?.let { snapshot?.repo?.categories?.get(it) ?: it },
                 recentSearches = recent,
-                categories = ready?.repo?.categories?.toList()?.sortedBy { it.second }.orEmpty(),
+                categories = snapshot?.repo?.categories?.toList()?.sortedBy { it.second }.orEmpty(),
                 results = results,
-                indexReady = ready != null,
+                indexReady = snapshot != null,
             )
         }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), SearchUiState())
 
