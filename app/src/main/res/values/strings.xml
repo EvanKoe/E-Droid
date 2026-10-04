@@ -82,6 +82,8 @@
     <string name="notification_channel_installs">App installs</string>
     <string name="notification_install_ready_title">%1$s is ready to install</string>
     <string name="notification_install_ready_text">Tap to finish installing</string>
+    <string name="notification_channel_downloads">Downloads</string>
+    <string name="notification_downloading_title">Downloading %1$s</string>
     <string name="details_version_updated">Version %1$s · updated %2$s</string>
     <string name="details_show_more">Show more</string>
     <string name="details_show_less">Show less</string>

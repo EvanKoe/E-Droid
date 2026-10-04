@@ -1,6 +1,7 @@
 package app.edroid.data.install
 
 import android.Manifest
+import android.annotation.SuppressLint
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
@@ -40,6 +41,9 @@ import java.security.MessageDigest
 import java.util.concurrent.ConcurrentHashMap
 
 private const val CHANNEL_ID = "installs"
+private const val DOWNLOAD_CHANNEL_ID = "downloads"
+/** Download notifications are tagged with the package name; this id only keeps them apart from session ids. */
+private const val DOWNLOAD_NOTIFICATION_ID = 0
 
 /** Where one package's Install button stands. Whether it is installed comes from [installedVersionCode]. */
 sealed interface InstallState {
@@ -79,6 +83,13 @@ class ApkInstaller(private val context: Context, private val client: OkHttpClien
     private val processLifecycle = ProcessLifecycleOwner.get().lifecycle
 
     init {
+        NotificationManagerCompat.from(context).createNotificationChannels(
+            listOf(
+                NotificationChannel(CHANNEL_ID, context.getString(R.string.notification_channel_installs), NotificationManager.IMPORTANCE_HIGH),
+                // Low: progress updates shouldn't buzz or pop up.
+                NotificationChannel(DOWNLOAD_CHANNEL_ID, context.getString(R.string.notification_channel_downloads), NotificationManager.IMPORTANCE_LOW),
+            ),
+        )
         processLifecycle.addObserver(object : DefaultLifecycleObserver {
             override fun onStart(owner: LifecycleOwner) {
                 pendingConfirms.keys.toList().forEach { sessionId ->
@@ -100,18 +111,20 @@ class ApkInstaller(private val context: Context, private val client: OkHttpClien
     fun install(packageName: String, appName: String, version: AppVersion) {
         val current = _states.value[packageName]
         if (current is InstallState.Downloading || current is InstallState.Installing) return
-        set(packageName, InstallState.Downloading(null))
+        val target = Session(packageName, appName)
+        setDownloading(target, null)
         val download = Download()
         downloads[packageName] = download
         download.job = scope.launch {
             try {
-                downloadAndCommit(Session(packageName, appName), version, download)
+                downloadAndCommit(target, version, download)
             } catch (e: Exception) {
                 // A cancelled call surfaces as an IOException; cancellation is reported below instead.
                 if (isActive) set(packageName, InstallState.Failed(e.message ?: e.javaClass.simpleName))
                 if (e is CancellationException) throw e
             } finally {
                 downloads.remove(packageName, download)
+                NotificationManagerCompat.from(context).cancel(packageName, DOWNLOAD_NOTIFICATION_ID)
             }
         }
         // Runs after the body, so nothing can overwrite this Idle.
@@ -169,7 +182,7 @@ class ApkInstaller(private val context: Context, private val client: OkHttpClien
                             val percent = total?.let { (read * 100 / it).toInt() }
                             if (percent != null && percent != lastPercent) {
                                 lastPercent = percent
-                                set(packageName, InstallState.Downloading(percent / 100f))
+                                setDownloading(target, percent / 100f)
                             }
                         }
                     }
@@ -235,15 +248,40 @@ class ApkInstaller(private val context: Context, private val client: OkHttpClien
         set(target.packageName, state)
     }
 
+    private fun canNotify() = Build.VERSION.SDK_INT < 33 ||
+        ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED
+
+    private fun setDownloading(target: Session, progress: Float?) {
+        set(target.packageName, InstallState.Downloading(progress))
+        notifyProgress(target, progress)
+    }
+
+    /** Ongoing progress notification with a Cancel action; tapping it opens EDroid. Silently skipped without permission. */
+    @SuppressLint("MissingPermission") // Checked by canNotify().
+    private fun notifyProgress(target: Session, progress: Float?) {
+        if (!canNotify()) return
+        val open = context.packageManager.getLaunchIntentForPackage(context.packageName)?.let {
+            PendingIntent.getActivity(context, 0, it, PendingIntent.FLAG_IMMUTABLE)
+        }
+        val builder = NotificationCompat.Builder(context, DOWNLOAD_CHANNEL_ID)
+            .setSmallIcon(android.R.drawable.stat_sys_download)
+            .setContentTitle(context.getString(R.string.notification_downloading_title, target.appName))
+            .setProgress(100, ((progress ?: 0f) * 100).toInt(), progress == null)
+            .setOngoing(true)
+            .setOnlyAlertOnce(true)
+            .setSilent(true)
+            .setCategory(NotificationCompat.CATEGORY_PROGRESS)
+            .setContentIntent(open)
+            .addAction(0, context.getString(R.string.action_cancel), InstallResultReceiver.cancelIntent(context, target.packageName))
+        if (progress != null) builder.setSubText("${(progress * 100).toInt()}%")
+        NotificationManagerCompat.from(context).notify(target.packageName, DOWNLOAD_NOTIFICATION_ID, builder.build())
+    }
+
     /** "Ready to install" notification whose tap opens the system dialog. Silently skipped without permission. */
+    @SuppressLint("MissingPermission") // Checked by canNotify().
     private fun notifyConfirm(sessionId: Int, appName: String, confirm: Intent) {
-        if (Build.VERSION.SDK_INT >= 33 &&
-            ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
-        ) return
+        if (!canNotify()) return
         val manager = NotificationManagerCompat.from(context)
-        manager.createNotificationChannel(
-            NotificationChannel(CHANNEL_ID, context.getString(R.string.notification_channel_installs), NotificationManager.IMPORTANCE_HIGH),
-        )
         val tap = PendingIntent.getActivity(
             context, sessionId, confirm, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )
