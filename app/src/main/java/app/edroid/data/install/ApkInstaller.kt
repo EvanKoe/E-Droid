@@ -2,6 +2,7 @@ package app.edroid.data.install
 
 import android.Manifest
 import android.annotation.SuppressLint
+import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
@@ -39,11 +40,13 @@ import okhttp3.Request
 import java.io.IOException
 import java.security.MessageDigest
 import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.atomic.AtomicInteger
 
 private const val CHANNEL_ID = "installs"
-private const val DOWNLOAD_CHANNEL_ID = "downloads"
-/** Download notifications are tagged with the package name; this id only keeps them apart from session ids. */
-private const val DOWNLOAD_NOTIFICATION_ID = 0
+internal const val DOWNLOAD_CHANNEL_ID = "downloads"
+
+/** A download's progress notification, as [DownloadService] needs it to go foreground. */
+internal class DownloadNotification(val id: Int, val notification: Notification)
 
 /** Where one package's Install button stands. Whether it is installed comes from [installedVersionCode]. */
 sealed interface InstallState {
@@ -64,7 +67,9 @@ sealed interface InstallState {
  * finishes in the background posts a notification instead, and the dialog also opens by itself
  * the next time EDroid comes back.
  *
- * Owns its scope so a download keeps going when the user leaves the detail page.
+ * Owns its scope so a download keeps going when the user leaves the detail page, and runs
+ * [DownloadService] while any download is in flight: without a foreground service, Android cuts
+ * a backgrounded app's network and the download dies with "Software caused connection abort".
  * Must be created on the main thread (it observes the process lifecycle).
  */
 class ApkInstaller(private val context: Context, private val client: OkHttpClient) {
@@ -100,31 +105,51 @@ class ApkInstaller(private val context: Context, private val client: OkHttpClien
     }
 
     /** A download in progress; [call] is cancelled alongside [job] so a blocked read returns at once. */
-    private class Download {
+    private class Download(val target: Session, val notificationId: Int) {
         lateinit var job: Job
         @Volatile var call: Call? = null
+        /** Latest progress notification, kept even without permission to post it: [DownloadService] still needs one. */
+        @Volatile lateinit var notification: Notification
+
+        fun shown() = DownloadNotification(notificationId, notification)
     }
 
     private val downloads = ConcurrentHashMap<String, Download>()
+
+    /** Negative, so they never collide with the session ids the "ready to install" notifications use. */
+    private val nextNotificationId = AtomicInteger(-1)
+
+    private val _foreground = MutableStateFlow<DownloadNotification?>(null)
+    /** The download whose notification [DownloadService] shows; null once none is left. */
+    internal val foreground: StateFlow<DownloadNotification?> = _foreground.asStateFlow()
 
     /** Starts installing (or updating to) [version]; ignored while that package is already in flight. */
     fun install(packageName: String, appName: String, version: AppVersion) {
         val current = _states.value[packageName]
         if (current is InstallState.Downloading || current is InstallState.Installing) return
-        val target = Session(packageName, appName)
-        setDownloading(target, null)
-        val download = Download()
+        val download = Download(Session(packageName, appName), nextNotificationId.getAndDecrement())
+        setDownloading(download, null)
         downloads[packageName] = download
+        // Already running otherwise; it follows [foreground] from there.
+        if (_foreground.compareAndSet(null, download.shown())) {
+            // Install is tapped in the UI, but don't lose the download if Android refuses anyway.
+            runCatching { ContextCompat.startForegroundService(context, Intent(context, DownloadService::class.java)) }
+        }
         download.job = scope.launch {
             try {
-                downloadAndCommit(target, version, download)
+                downloadAndCommit(download.target, version, download)
             } catch (e: Exception) {
                 // A cancelled call surfaces as an IOException; cancellation is reported below instead.
                 if (isActive) set(packageName, InstallState.Failed(e.message ?: e.javaClass.simpleName))
                 if (e is CancellationException) throw e
             } finally {
                 downloads.remove(packageName, download)
-                NotificationManagerCompat.from(context).cancel(packageName, DOWNLOAD_NOTIFICATION_ID)
+                // Hand the service over to another download, or let it stop.
+                _foreground.update { lead ->
+                    if (lead?.id != download.notificationId) lead else downloads.values.firstOrNull()?.shown()
+                }
+                // Ignored while it is still the service's notification; the service removes it then.
+                NotificationManagerCompat.from(context).cancel(download.notificationId)
             }
         }
         // Runs after the body, so nothing can overwrite this Idle.
@@ -182,7 +207,7 @@ class ApkInstaller(private val context: Context, private val client: OkHttpClien
                             val percent = total?.let { (read * 100 / it).toInt() }
                             if (percent != null && percent != lastPercent) {
                                 lastPercent = percent
-                                setDownloading(target, percent / 100f)
+                                setDownloading(download, percent / 100f)
                             }
                         }
                     }
@@ -251,15 +276,15 @@ class ApkInstaller(private val context: Context, private val client: OkHttpClien
     private fun canNotify() = Build.VERSION.SDK_INT < 33 ||
         ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED
 
-    private fun setDownloading(target: Session, progress: Float?) {
-        set(target.packageName, InstallState.Downloading(progress))
-        notifyProgress(target, progress)
+    private fun setDownloading(download: Download, progress: Float?) {
+        set(download.target.packageName, InstallState.Downloading(progress))
+        notifyProgress(download, progress)
     }
 
-    /** Ongoing progress notification with a Cancel action; tapping it opens EDroid. Silently skipped without permission. */
+    /** Ongoing progress notification with a Cancel action; tapping it opens EDroid. Only built, not posted, without permission. */
     @SuppressLint("MissingPermission") // Checked by canNotify().
-    private fun notifyProgress(target: Session, progress: Float?) {
-        if (!canNotify()) return
+    private fun notifyProgress(download: Download, progress: Float?) {
+        val target = download.target
         val open = context.packageManager.getLaunchIntentForPackage(context.packageName)?.let {
             PendingIntent.getActivity(context, 0, it, PendingIntent.FLAG_IMMUTABLE)
         }
@@ -274,7 +299,8 @@ class ApkInstaller(private val context: Context, private val client: OkHttpClien
             .setContentIntent(open)
             .addAction(0, context.getString(R.string.action_cancel), InstallResultReceiver.cancelIntent(context, target.packageName))
         if (progress != null) builder.setSubText("${(progress * 100).toInt()}%")
-        NotificationManagerCompat.from(context).notify(target.packageName, DOWNLOAD_NOTIFICATION_ID, builder.build())
+        download.notification = builder.build()
+        if (canNotify()) NotificationManagerCompat.from(context).notify(download.notificationId, download.notification)
     }
 
     /** "Ready to install" notification whose tap opens the system dialog. Silently skipped without permission. */

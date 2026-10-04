@@ -6,6 +6,9 @@
     <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
     <uses-permission android:name="android.permission.REQUEST_DELETE_PACKAGES" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <!-- Keeps downloads (and their network access) alive after the user leaves the app. -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
     <!-- An app store has to see every installed package to tell which of its apps are installed. -->
     <uses-permission
         android:name="android.permission.QUERY_ALL_PACKAGES"
@@ -32,6 +35,11 @@
         <receiver
             android:name=".data.install.InstallResultReceiver"
             android:exported="false" />
+
+        <service
+            android:name=".data.install.DownloadService"
+            android:exported="false"
+            android:foregroundServiceType="dataSync" />
     </application>
 
 </manifest>
