@@ -119,8 +119,11 @@ import androidx.compose.material.icons.rounded.WbSunny
 import androidx.compose.material.icons.rounded.Widgets
 import androidx.compose.material.icons.rounded.Wifi
 import androidx.compose.material.icons.rounded.Edit
+import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
+import androidx.compose.material3.MaterialShapes
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.graphics.shapes.RoundedPolygon
 
 /**
  * Icon for an F-Droid category id (the untranslated key of `repo.categories`, e.g. "Puzzle Game").
@@ -135,6 +138,39 @@ fun categoryIcon(id: String): ImageVector = CategoryIcons[id] ?: Icons.Rounded.C
  * both light and dark themes.
  */
 fun categoryColor(id: String): Color = CategoryColors[Math.floorMod(id.hashCode(), CategoryColors.size)]
+
+/** Expressive shape behind a category's icon badge; hashed like [categoryColor] but decorrelated. */
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
+fun categoryIconShape(id: String): RoundedPolygon {
+    val shapes = listOf(
+        MaterialShapes.Cookie4Sided,
+        MaterialShapes.Cookie6Sided,
+        MaterialShapes.Cookie7Sided,
+        MaterialShapes.Cookie9Sided,
+        MaterialShapes.Sunny,
+        MaterialShapes.Clover4Leaf,
+        MaterialShapes.Arch,
+        MaterialShapes.Square,
+        MaterialShapes.Circle,
+        MaterialShapes.Gem,
+        MaterialShapes.Puffy,
+        MaterialShapes.PuffyDiamond,
+        MaterialShapes.SoftBurst,
+    )
+    return shapes[Math.floorMod(id.reversed().hashCode(), shapes.size)]
+}
+
+/** Large wavy shape that bleeds off the end of a full-width category banner. */
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
+fun categoryBannerShape(id: String): RoundedPolygon {
+    val shapes = listOf(
+        MaterialShapes.Cookie9Sided,
+        MaterialShapes.Cookie12Sided,
+        MaterialShapes.Sunny,
+        MaterialShapes.SoftBurst,
+    )
+    return shapes[Math.floorMod(id.reversed().hashCode(), shapes.size)]
+}
 
 private val CategoryColors = listOf(
     Color(0xFF6A52A8), // purple

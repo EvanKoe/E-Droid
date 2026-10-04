@@ -150,17 +150,21 @@ fun MainScreen() {
     val focusManager = LocalFocusManager.current
     val keyboard = LocalSoftwareKeyboardController.current
     val onAppClick: (App) -> Unit = { app ->
+        haptics.performHapticFeedback(HapticFeedbackType.VirtualKey)
         focusManager.clearFocus()
         keyboard?.hide()
         openApp = OpenApp(app.packageName, app.name)
     }
     val onCategoryClick: (String, String) -> Unit = { id, name ->
+        haptics.performHapticFeedback(HapticFeedbackType.VirtualKey)
         focusManager.clearFocus()
         keyboard?.hide()
         openCategory = OpenCategory(id, name)
     }
     // Pops the topmost pushed page: the detail page first, then the category or permissions page.
+    // Covers both the back bar and the system back gesture, so both get the same light tick.
     val goBack: () -> Unit = {
+        haptics.performHapticFeedback(HapticFeedbackType.VirtualKey)
         when {
             openApp != null -> openApp = null
             openCategory != null -> openCategory = null
@@ -300,8 +304,8 @@ fun MainScreen() {
                     items = tabs.map { NavBarItem(stringResource(it.labelRes), it.icon) },
                     selectedIndex = selectedIndex,
                     onSelect = { index ->
+                        haptics.performHapticFeedback(HapticFeedbackType.VirtualKey)
                         if (index != selectedIndex) {
-                            haptics.performHapticFeedback(HapticFeedbackType.LongPress)
                             searchFocusRequest = 0
                             selectedIndex = index
                         } else if (tabs[index] == HomeTab.Search) {

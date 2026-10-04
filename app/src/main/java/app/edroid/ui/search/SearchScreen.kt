@@ -4,23 +4,24 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.requiredSize
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
@@ -28,13 +29,16 @@ import androidx.compose.material.icons.rounded.Clear
 import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextField
 import androidx.compose.material3.TextFieldDefaults
+import androidx.compose.material3.toShape
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
@@ -46,12 +50,14 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.lerp
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -65,7 +71,6 @@ import app.edroid.ui.components.SectionTitle
 import app.edroid.ui.theme.GroupedItemSpacing
 import app.edroid.ui.theme.Layering
 import app.edroid.ui.theme.PageHorizontalPadding
-import app.edroid.ui.theme.gridGroupedShapeAt
 import app.edroid.ui.theme.groupedShapeAt
 
 /**
@@ -246,24 +251,13 @@ private fun BrowseList(
         }
         if (state.categories.isNotEmpty()) {
             item(key = "categories-title") { SectionTitle(stringResource(R.string.categories)) }
-            val count = state.categories.size
-            itemsIndexed(state.categories.chunked(CategoryColumns), key = { _, row -> "cat:${row.first().first}" }) { rowIndex, row ->
-                val rowStart = rowIndex * CategoryColumns
-                Row(
-                    modifier = Modifier.height(IntrinsicSize.Min),
-                    horizontalArrangement = Arrangement.spacedBy(GroupedItemSpacing),
-                ) {
-                    row.forEachIndexed { i, (id, name) ->
-                        CategoryTile(
-                            id = id,
-                            name = name,
-                            shape = gridGroupedShapeAt(rowStart + i, count, CategoryColumns),
-                            onClick = { onCategorySelected(id, name) },
-                            modifier = Modifier.weight(1f).fillMaxHeight(),
-                        )
-                    }
-                    repeat(CategoryColumns - row.size) { Spacer(Modifier.weight(1f)) }
-                }
+            items(categoryBlocks(state.categories), key = { "cat:${it.categories.first().first}" }) { block ->
+                // The list spaces items for grouped rows; the bento grid wants a wider gutter.
+                CategoryBlockRow(
+                    block = block,
+                    onCategorySelected = onCategorySelected,
+                    modifier = Modifier.padding(top = CategoryGap - GroupedItemSpacing),
+                )
             }
         } else if (!state.indexReady) {
             item(key = "loading") {
@@ -329,33 +323,185 @@ private fun RecentSearchRow(query: String, shape: Shape, onClick: () -> Unit, on
     }
 }
 
-private const val CategoryColumns = 3
+private val CategoryGap: Dp = 8.dp
+private val CategoryTileHeight: Dp = 96.dp
+private val CategoryTallTileHeight: Dp = CategoryTileHeight * 2 + CategoryGap
 
-/** A grid cell: colored icon badge above the category name, centered. */
+/**
+ * One row of the bento category grid. Blocks cycle wide banner → tall tile on the start with two
+ * small tiles beside it → the mirror of that, so seven categories make up one repeat.
+ */
+private sealed interface CategoryBlock {
+    val categories: List<Pair<String, String>>
+
+    data class Wide(val category: Pair<String, String>) : CategoryBlock {
+        override val categories get() = listOf(category)
+    }
+
+    /** [categories] in row-by-row reading order, so the tall tile is first at the start, second at the end. */
+    data class Split(override val categories: List<Pair<String, String>>, val tallAtStart: Boolean) : CategoryBlock
+
+    /** Leftover pair at the end of the list, too few for a split block. */
+    data class Duo(override val categories: List<Pair<String, String>>) : CategoryBlock
+}
+
+private fun categoryBlocks(categories: List<Pair<String, String>>): List<CategoryBlock> {
+    val blocks = mutableListOf<CategoryBlock>()
+    var i = 0
+    while (i < categories.size) {
+        val remaining = categories.size - i
+        val block = when {
+            blocks.size % 3 == 0 || remaining == 1 -> CategoryBlock.Wide(categories[i])
+            remaining == 2 -> CategoryBlock.Duo(categories.subList(i, i + 2))
+            else -> CategoryBlock.Split(categories.subList(i, i + 3), tallAtStart = blocks.size % 3 == 1)
+        }
+        blocks += block
+        i += block.categories.size
+    }
+    return blocks
+}
+
 @Composable
-private fun CategoryTile(id: String, name: String, shape: Shape, onClick: () -> Unit, modifier: Modifier = Modifier) {
+private fun CategoryBlockRow(
+    block: CategoryBlock,
+    onCategorySelected: (id: String, name: String) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    when (block) {
+        is CategoryBlock.Wide -> {
+            val (id, name) = block.category
+            CategoryBanner(id, name, onClick = { onCategorySelected(id, name) }, modifier = modifier)
+        }
+        is CategoryBlock.Duo -> Row(modifier, horizontalArrangement = Arrangement.spacedBy(CategoryGap)) {
+            block.categories.forEach { (id, name) ->
+                CategorySmallTile(id, name, onClick = { onCategorySelected(id, name) }, modifier = Modifier.weight(1f))
+            }
+        }
+        is CategoryBlock.Split -> Row(modifier, horizontalArrangement = Arrangement.spacedBy(CategoryGap)) {
+            val tall = if (block.tallAtStart) block.categories.first() else block.categories[1]
+            val smalls = block.categories - tall
+            if (block.tallAtStart) {
+                CategoryTallTile(tall.first, tall.second, onClick = { onCategorySelected(tall.first, tall.second) }, modifier = Modifier.weight(1f))
+            }
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(CategoryGap)) {
+                smalls.forEach { (id, name) ->
+                    CategorySmallTile(id, name, onClick = { onCategorySelected(id, name) })
+                }
+            }
+            if (!block.tallAtStart) {
+                CategoryTallTile(tall.first, tall.second, onClick = { onCategorySelected(tall.first, tall.second) }, modifier = Modifier.weight(1f))
+            }
+        }
+    }
+}
+
+/** Pastel container, saturated accent for the shape badge, and a readable tint of it for text. */
+@Immutable
+private class CategoryTileColors(val container: Color, val accent: Color, val content: Color)
+
+@Composable
+private fun categoryTileColors(id: String): CategoryTileColors {
+    val accent = categoryColor(id)
+    val page = Layering.page
+    val dark = page.luminance() < 0.5f
+    return CategoryTileColors(
+        container = lerp(accent, page, if (dark) 0.72f else 0.8f),
+        accent = accent,
+        content = if (dark) lerp(accent, Color.White, 0.75f) else lerp(accent, Color.Black, 0.55f),
+    )
+}
+
+@Composable
+private fun CategoryCard(
+    colors: CategoryTileColors,
+    onClick: () -> Unit,
+    height: Dp,
+    modifier: Modifier = Modifier,
+    content: @Composable BoxScope.() -> Unit,
+) {
     Card(
         onClick = onClick,
-        modifier = modifier,
-        shape = shape,
-        colors = CardDefaults.cardColors(containerColor = Layering.item),
+        modifier = modifier.fillMaxWidth().height(height),
+        shape = MaterialTheme.shapes.extraLarge,
+        colors = CardDefaults.cardColors(containerColor = colors.container, contentColor = colors.content),
     ) {
-        Column(
-            modifier = Modifier.fillMaxSize().padding(horizontal = 8.dp, vertical = 20.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.Center,
+        Box(Modifier.fillMaxSize(), content = content)
+    }
+}
+
+/** Icon on an expressive shape badge. */
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
+@Composable
+private fun CategoryBadge(id: String, color: Color, size: Dp, iconSize: Dp, modifier: Modifier = Modifier) {
+    val shape = categoryIconShape(id).toShape()
+    Box(modifier.size(size).background(color, shape), contentAlignment = Alignment.Center) {
+        Icon(categoryIcon(id), contentDescription = null, tint = Color.White, modifier = Modifier.size(iconSize))
+    }
+}
+
+/** Full-width banner: name on the start, a large wavy accent shape bleeding off the end. */
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
+@Composable
+private fun CategoryBanner(id: String, name: String, onClick: () -> Unit, modifier: Modifier = Modifier) {
+    val colors = categoryTileColors(id)
+    val shape = categoryBannerShape(id).toShape()
+    CategoryCard(colors, onClick, CategoryTileHeight, modifier) {
+        Box(
+            Modifier
+                .align(Alignment.CenterEnd)
+                .offset(x = 80.dp)
+                .requiredSize(220.dp)
+                .background(colors.accent, shape),
+        )
+        Icon(
+            categoryIcon(id),
+            contentDescription = null,
+            tint = Color.White,
+            modifier = Modifier.align(Alignment.CenterEnd).padding(end = 50.dp).size(40.dp),
+        )
+        Text(
+            name,
+            style = MaterialTheme.typography.headlineSmall,
+            fontWeight = FontWeight.Bold,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.align(Alignment.CenterStart).padding(start = 22.dp, end = 160.dp, top = 12.dp),
+        )
+    }
+}
+
+/** Double-height tile: big badge at the top, name anchored to the bottom. */
+@Composable
+private fun CategoryTallTile(id: String, name: String, onClick: () -> Unit, modifier: Modifier = Modifier) {
+    val colors = categoryTileColors(id)
+    CategoryCard(colors, onClick, CategoryTallTileHeight, modifier) {
+        CategoryBadge(id, colors.accent, size = 72.dp, iconSize = 34.dp, modifier = Modifier.padding(20.dp))
+        Text(
+            name,
+            style = MaterialTheme.typography.titleLarge,
+            fontWeight = FontWeight.Bold,
+            maxLines = 3,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.align(Alignment.BottomStart).padding(start = 18.dp, end = 18.dp, bottom = 18.dp),
+        )
+    }
+}
+
+/** Single-height tile: small badge then the name, side by side. */
+@Composable
+private fun CategorySmallTile(id: String, name: String, onClick: () -> Unit, modifier: Modifier = Modifier) {
+    val colors = categoryTileColors(id)
+    CategoryCard(colors, onClick, CategoryTileHeight, modifier) {
+        Row(
+            modifier = Modifier.fillMaxSize().padding(horizontal = 14.dp),
+            verticalAlignment = Alignment.CenterVertically,
         ) {
-            Box(
-                modifier = Modifier.size(48.dp).background(categoryColor(id), RoundedCornerShape(14.dp)),
-                contentAlignment = Alignment.Center,
-            ) {
-                Icon(categoryIcon(id), contentDescription = null, tint = Color.White, modifier = Modifier.size(26.dp))
-            }
-            Spacer(Modifier.height(12.dp))
+            CategoryBadge(id, colors.accent, size = 48.dp, iconSize = 24.dp)
+            Spacer(Modifier.width(14.dp))
             Text(
                 name,
-                style = MaterialTheme.typography.bodyMedium,
-                textAlign = TextAlign.Center,
+                style = MaterialTheme.typography.titleSmall,
+                fontWeight = FontWeight.Bold,
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis,
             )

@@ -219,12 +219,6 @@ fun AppDetailScreen(
             iconUrl = app?.iconUrl,
             modifier = inset,
         ) {
-            Text(
-                text = selected?.versionCode.toString(),
-                color = MaterialTheme.colorScheme.onSecondaryContainer,
-                style = MaterialTheme.typography.labelLarge
-            )
-
             InstallActions(
                 state = ActionsState(
                     install = installState,

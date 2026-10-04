@@ -1,14 +1,47 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!-- Converted from "Frame 44.svg" (1037x1037). The frame fills the 72dp visible area of the
+     108dp adaptive canvas: viewport = 1037 * 1.5, shifted by 1037 / 4. -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="108dp"
     android:height="108dp"
-    android:viewportWidth="108"
-    android:viewportHeight="108">
-    <!-- Rounded "download tray" glyph: a bar with a down-arrow, centred in the safe zone. -->
-    <path
-        android:fillColor="#FFFFFFFF"
-        android:pathData="M54,30 a4,4 0 0 1 4,4 v20.3 l7.2,-7.2 a4,4 0 0 1 5.6,5.6 l-14,14 a4,4 0 0 1 -5.6,0 l-14,-14 a4,4 0 0 1 5.6,-5.6 l7.2,7.2 V34 a4,4 0 0 1 4,-4 z" />
-    <path
-        android:fillColor="#FFFFFFFF"
-        android:pathData="M34,70 h40 a4,4 0 0 1 0,8 H34 a4,4 0 0 1 0,-8 z" />
+    android:viewportWidth="1555.5"
+    android:viewportHeight="1555.5">
+    <group
+        android:translateX="259.25"
+        android:translateY="259.25">
+        <!-- Scalloped "cookie" badge -->
+        <path
+            android:fillColor="#EADDFF"
+            android:pathData="M464.971,235.872C494.191,204.573 543.809,204.573 573.029,235.872C590.402,254.48 616.128,262.839 641.12,257.996C683.157,249.85 723.298,279.015 728.541,321.511C731.658,346.777 747.558,368.661 770.624,379.433C809.42,397.551 824.753,444.74 804.016,482.202C791.687,504.475 791.687,531.525 804.016,553.798C824.753,591.26 809.42,638.449 770.624,656.567C747.558,667.339 731.658,689.223 728.541,714.489C723.298,756.985 683.157,786.15 641.12,778.004C616.128,773.161 590.402,781.52 573.029,800.128C543.809,831.427 494.191,831.427 464.971,800.128C447.598,781.52 421.872,773.161 396.88,778.004C354.843,786.15 314.702,756.985 309.459,714.489C306.342,689.223 290.442,667.339 267.376,656.567C228.58,638.449 213.247,591.26 233.984,553.798C246.313,531.525 246.313,504.475 233.984,482.202C213.247,444.74 228.58,397.551 267.376,379.433C290.442,368.661 306.342,346.777 309.459,321.511C314.702,279.015 354.843,249.85 396.88,257.996C421.872,262.839 447.598,254.48 464.971,235.872Z" />
+        <!-- Tray bar -->
+        <group
+            android:pivotX="408.996"
+            android:pivotY="689"
+            android:rotation="-90">
+            <path
+                android:fillColor="#633B48"
+                android:pathData="M438.996,689a30,30 0 0 1 30,30v160a30,30 0 0 1 -60,0v-160a30,30 0 0 1 30,-30z" />
+        </group>
+        <!-- Arrow shaft -->
+        <path
+            android:fillColor="#4F378A"
+            android:pathData="M519.777,347a30,30 0 0 1 30,30v194a30,30 0 0 1 -60,0v-194a30,30 0 0 1 30,-30z" />
+        <!-- Arrow head -->
+        <group
+            android:pivotX="609.195"
+            android:pivotY="460.475"
+            android:rotation="51.4724">
+            <path
+                android:fillColor="#4F378A"
+                android:pathData="M639.195,460.475a30,30 0 0 1 30,30v109.264a30,30 0 0 1 -60,0v-109.264a30,30 0 0 1 30,-30z" />
+        </group>
+        <group
+            android:pivotX="561.621"
+            android:pivotY="566.736"
+            android:rotation="128.695">
+            <path
+                android:fillColor="#4F378A"
+                android:pathData="M591.621,566.736a30,30 0 0 1 30,30v109.264a30,30 0 0 1 -60,0v-109.264a30,30 0 0 1 30,-30z" />
+        </group>
+    </group>
 </vector>
