@@ -78,6 +78,7 @@
     <string name="action_installing">Installing…</string>
     <string name="action_uninstall">Uninstall</string>
     <string name="action_update">Update</string>
+    <string name="action_open">Open</string>
     <string name="action_cancel">Cancel</string>
     <string name="notification_channel_installs">App installs</string>
     <string name="notification_install_ready_title">%1$s is ready to install</string>

@@ -36,6 +36,14 @@ fun Context.installedVersionCode(packageName: String): Flow<Long?> = callbackFlo
     awaitClose { unregisterReceiver(receiver) }
 }.distinctUntilChanged()
 
+/** Whether [packageName] has a launcher activity [openApp] can start. */
+fun Context.canOpenApp(packageName: String): Boolean = packageManager.getLaunchIntentForPackage(packageName) != null
+
+/** Starts [packageName]'s launcher activity, if it has one. */
+fun Context.openApp(packageName: String) {
+    packageManager.getLaunchIntentForPackage(packageName)?.let { runCatching { startActivity(it) } }
+}
+
 /** Opens the system uninstall dialog for [packageName]. */
 fun Context.requestUninstall(packageName: String) {
     startActivity(Intent(Intent.ACTION_DELETE, Uri.fromParts("package", packageName, null)))

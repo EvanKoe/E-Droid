@@ -107,8 +107,10 @@ import app.edroid.data.fdroid.model.App
 import app.edroid.data.fdroid.model.AppDetails
 import app.edroid.data.fdroid.model.AppVersion
 import app.edroid.data.install.InstallState
+import app.edroid.data.install.canOpenApp
 import app.edroid.data.install.installedVersionCode
 import app.edroid.data.install.installedVersionCodeNow
+import app.edroid.data.install.openApp
 import app.edroid.data.install.requestUninstall
 import app.edroid.ui.components.PageTitle
 import app.edroid.ui.components.SectionTitle
@@ -187,6 +189,10 @@ fun AppDetailScreen(
     val installedVersion by remember(context, packageName) {
         context.applicationContext.installedVersionCode(packageName)
     }.collectAsStateWithLifecycle(initialValue = initialInstalledVersion)
+    // Re-checked per installed version, since an update can add or drop the launcher activity.
+    val canOpen = remember(context, packageName, installedVersion) {
+        installedVersion != null && context.canOpenApp(packageName)
+    }
     // The App row already knows the newest version, so Update doesn't wait on the details.
     val targetVersionCode = selected?.versionCode ?: app?.latestVersionCode
     // Lets the "ready to install" notification show when a download finishes in the background.
@@ -225,8 +231,10 @@ fun AppDetailScreen(
                     installed = installedVersion != null,
                     updateAvailable = installedVersion.let { it != null && targetVersionCode != null && targetVersionCode > it },
                     canInstall = selected != null,
+                    canOpen = canOpen,
                 ),
                 onInstall = onInstall,
+                onOpen = { context.openApp(packageName) },
                 onUninstall = { context.requestUninstall(packageName) },
                 onCancel = { installer.cancel(packageName) },
             )
@@ -254,7 +262,7 @@ fun AppDetailScreen(
 }
 
 /** The single button on the right. It morphs between these rather than being swapped out. */
-private enum class TrailingAction { Install, Retry, Update, Cancel, None }
+private enum class TrailingAction { Install, Retry, Update, Open, Cancel, None }
 
 /** What fills the room left of [TrailingAction]. */
 private enum class LeadingContent { None, Uninstall, Progress }
@@ -265,6 +273,7 @@ private data class ActionsState(
     val installed: Boolean,
     val updateAvailable: Boolean,
     val canInstall: Boolean,
+    val canOpen: Boolean,
 ) {
     private val busy get() = install is InstallState.Downloading || install is InstallState.Installing
 
@@ -279,6 +288,7 @@ private data class ActionsState(
         get() = when {
             busy -> TrailingAction.Cancel
             installed && updateAvailable -> TrailingAction.Update
+            installed && canOpen -> TrailingAction.Open
             installed -> TrailingAction.None
             install is InstallState.Failed -> TrailingAction.Retry
             else -> TrailingAction.Install
@@ -308,16 +318,18 @@ private fun <T> bouncySpring() = spring<T>(dampingRatio = 0.5f, stiffness = Spri
  *  - not installed: Install (Retry after a failure) across the whole width
  *  - downloading or installing: the button squishes toward the right edge into Cancel, and the
  *    progress bar fades in on the left
- *  - installed: Uninstall on the left, sharing the row with Update when a newer version is out
+ *  - installed: Uninstall on the left, sharing the row with Update when a newer version is out,
+ *    otherwise with Open (alone only when the app has nothing to launch)
  *
  * Every switch is the trailing button's width riding [bouncySpring], with the leading slot taking
- * whatever is left, so Install → Cancel → Uninstall reads as one continuous morph. Pressing
- * Uninstall or Update widens it at the other's expense.
+ * whatever is left, so Install → Cancel → Uninstall/Open reads as one continuous morph. Pressing
+ * Uninstall or the trailing button widens it at the other's expense.
  */
 @Composable
 private fun RowScope.InstallActions(
     state: ActionsState,
     onInstall: () -> Unit,
+    onOpen: () -> Unit,
     onUninstall: () -> Unit,
     onCancel: () -> Unit,
 ) {
@@ -347,7 +359,7 @@ private fun RowScope.InstallActions(
             TrailingAction.None -> 0.dp
             TrailingAction.Cancel -> CancelWidth
             TrailingAction.Install, TrailingAction.Retry -> full
-            TrailingAction.Update -> half * when {
+            TrailingAction.Update, TrailingAction.Open -> half * when {
                 trailingPressed -> 1f + PRESS_EXPAND_RATIO
                 leadingPressed -> 1f - PRESS_EXPAND_RATIO
                 else -> 1f
@@ -387,11 +399,12 @@ private fun RowScope.InstallActions(
                     when (state.trailing) {
                         TrailingAction.Cancel -> onCancel()
                         TrailingAction.Install, TrailingAction.Retry, TrailingAction.Update -> onInstall()
+                        TrailingAction.Open -> onOpen()
                         TrailingAction.None -> Unit
                     }
                 },
                 shapes = ButtonDefaults.shapes(),
-                enabled = state.canInstall || state.trailing == TrailingAction.Cancel,
+                enabled = state.canInstall || state.trailing == TrailingAction.Cancel || state.trailing == TrailingAction.Open,
                 colors = ButtonDefaults.buttonColors(containerColor = containerColor, contentColor = contentColor),
                 contentPadding = PairedButtonPadding,
                 interactionSource = trailingInteractions,
@@ -409,6 +422,7 @@ private fun RowScope.InstallActions(
                         when (action) {
                             TrailingAction.Retry -> R.string.action_retry
                             TrailingAction.Update -> R.string.action_update
+                            TrailingAction.Open -> R.string.action_open
                             TrailingAction.Cancel -> R.string.action_cancel
                             TrailingAction.Install, TrailingAction.None -> R.string.action_install
                         },
