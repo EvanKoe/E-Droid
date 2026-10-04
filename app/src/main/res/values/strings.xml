@@ -21,6 +21,8 @@
     <string name="options_general">General</string>
     <string name="options_permissions">Permissions</string>
     <string name="options_permissions_summary">What EDroid asks for and why</string>
+    <string name="options_haptics">Haptics</string>
+    <string name="options_haptics_summary">Vibrate lightly when navigating</string>
     <string name="options_about">About</string>
     <string name="dev_card_author">Made by Evan Koehler</string>
     <string name="dev_card_github">View on GitHub</string>

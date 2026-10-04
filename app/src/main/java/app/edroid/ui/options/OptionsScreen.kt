@@ -22,14 +22,17 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowRight
 import androidx.compose.material.icons.rounded.Coffee
 import androidx.compose.material.icons.rounded.Security
+import androidx.compose.material.icons.rounded.Vibration
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -43,9 +46,12 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.core.net.toUri
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.viewmodel.compose.viewModel
 import app.edroid.R
 import app.edroid.ui.components.PageTitle
 import app.edroid.ui.components.SectionTitle
+import app.edroid.ui.theme.GroupedItemSpacing
 import app.edroid.ui.theme.Layering
 import app.edroid.ui.theme.groupedShape
 
@@ -56,7 +62,12 @@ import app.edroid.ui.theme.groupedShape
  * @param onPermissionsClick opens the permissions explanation page.
  */
 @Composable
-fun OptionsScreen(contentPadding: PaddingValues, onPermissionsClick: () -> Unit) {
+fun OptionsScreen(
+    contentPadding: PaddingValues,
+    onPermissionsClick: () -> Unit,
+    viewModel: OptionsViewModel = viewModel(factory = OptionsViewModel.Factory),
+) {
+    val hapticsEnabled by viewModel.hapticsEnabled.collectAsStateWithLifecycle()
     val context = LocalContext.current
     val openUrl = { url: String ->
         context.startActivity(Intent(Intent.ACTION_VIEW, url.toUri()).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
@@ -70,6 +81,7 @@ fun OptionsScreen(contentPadding: PaddingValues, onPermissionsClick: () -> Unit)
             .fillMaxSize()
             .verticalScroll(rememberScrollState())
             .padding(contentPadding),
+        verticalArrangement = Arrangement.spacedBy(GroupedItemSpacing),
     ) {
         PageTitle(text = stringResource(R.string.options_title))
         SectionTitle(stringResource(R.string.options_general))
@@ -77,8 +89,16 @@ fun OptionsScreen(contentPadding: PaddingValues, onPermissionsClick: () -> Unit)
             icon = Icons.Rounded.Security,
             title = stringResource(R.string.options_permissions),
             summary = stringResource(R.string.options_permissions_summary),
-            shape = groupedShape(isFirst = true, isLast = true),
+            shape = groupedShape(isFirst = true),
             onClick = onPermissionsClick,
+        )
+        SwitchOptionItem(
+            icon = Icons.Rounded.Vibration,
+            title = stringResource(R.string.options_haptics),
+            summary = stringResource(R.string.options_haptics_summary),
+            shape = groupedShape(isLast = true),
+            checked = hapticsEnabled,
+            onCheckedChange = viewModel::setHapticsEnabled,
         )
         SectionTitle(stringResource(R.string.options_about))
         DevCard(
@@ -98,6 +118,40 @@ private fun OptionItem(
     summary: String,
     shape: Shape,
     onClick: () -> Unit,
+) {
+    OptionCard(icon, title, summary, shape, onClick) {
+        Icon(
+            Icons.AutoMirrored.Rounded.KeyboardArrowRight,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    }
+}
+
+/** A boolean row of the Options list; tapping anywhere on it flips the trailing switch. */
+@Composable
+private fun SwitchOptionItem(
+    icon: ImageVector,
+    title: String,
+    summary: String,
+    shape: Shape,
+    checked: Boolean,
+    onCheckedChange: (Boolean) -> Unit,
+) {
+    OptionCard(icon, title, summary, shape, onClick = { onCheckedChange(!checked) }) {
+        Switch(checked = checked, onCheckedChange = onCheckedChange)
+    }
+}
+
+/** Shared layout of an Options row: icon badge, title and summary, then [trailing]. */
+@Composable
+private fun OptionCard(
+    icon: ImageVector,
+    title: String,
+    summary: String,
+    shape: Shape,
+    onClick: () -> Unit,
+    trailing: @Composable () -> Unit,
 ) {
     Card(
         onClick = onClick,
@@ -123,11 +177,8 @@ private fun OptionItem(
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
-            Icon(
-                Icons.AutoMirrored.Rounded.KeyboardArrowRight,
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
+            Spacer(Modifier.width(8.dp))
+            trailing()
         }
     }
 }
