@@ -1,5 +1,23 @@
 package app.edroid.ui.apps
 
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.expandHorizontally
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkHorizontally
+import androidx.compose.animation.togetherWith
+import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.material.icons.rounded.Shuffle
+import androidx.compose.material3.FilledIconButton
+import androidx.compose.material3.IconButtonDefaults
+import app.edroid.ui.components.ActionGap
+import app.edroid.ui.components.CancelWidth
+import app.edroid.ui.components.InstallActions
+import app.edroid.ui.components.TrailingAction
+import app.edroid.ui.components.appInstallActions
+import app.edroid.ui.components.bouncySpring
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.layout.Arrangement
@@ -144,7 +162,7 @@ fun AppListScreen(
                     }
                     SyncState.Idle -> Unit
                 }
-                homeItems(state.featured, state.apps, state.sort, viewModel::onSortSelected, onAppClick)
+                homeItems(state.featured, state.apps, state.sort, viewModel::onSortSelected, viewModel::shuffleFeatured, onAppClick)
             } else {
                 when (sync) {
                     is SyncState.Loading -> fullLineItem(key = "loading") {
@@ -183,6 +201,7 @@ private fun LazyGridScope.homeItems(
     apps: List<App>,
     sort: AppSort,
     onSortSelected: (AppSort) -> Unit,
+    onShuffle: () -> Unit,
     onAppClick: (App) -> Unit,
 ) {
     if (featured == null) {
@@ -200,7 +219,7 @@ private fun LazyGridScope.homeItems(
         SectionTitle(stringResource(R.string.home_featured_title))
     }
     fullLineItem(key = "featured") {
-        FeaturedAppCard(featured, animateGridItem()) { onAppClick(featured) }
+        FeaturedAppCard(featured, onClick = { onAppClick(featured) }, onShuffle = onShuffle, modifier = animateGridItem())
     }
     if (apps.isEmpty()) return
     fullLineItem(key = "others-title") {
@@ -304,39 +323,112 @@ private fun AppIcon(app: App, modifier: Modifier = Modifier) {
     }
 }
 
-/** Standalone card for the random app: large icon beside its name and summary. */
+/**
+ * Standalone card for the random app on a tonal (secondary container) surface, so it stands apart
+ * from the neutral grid below: large icon beside its name and summary, then Install and Details,
+ * with a shuffle button on the end drawing another app.
+ */
 @Composable
-private fun FeaturedAppCard(app: App, modifier: Modifier = Modifier, onClick: () -> Unit) {
+private fun FeaturedAppCard(app: App, onClick: () -> Unit, onShuffle: () -> Unit, modifier: Modifier = Modifier) {
     Card(
         onClick = onClick,
         modifier = modifier.fillMaxWidth(),
         shape = RoundedCornerShape(FeaturedCardRadius),
-        colors = CardDefaults.cardColors(containerColor = Layering.item),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.secondaryContainer,
+            contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
+        ),
     ) {
-        Row(
-            modifier = Modifier.padding(horizontal = 24.dp, vertical = 28.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            AppIcon(app, Modifier.size(80.dp))
-            Spacer(Modifier.width(24.dp))
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    app.name,
-                    style = MaterialTheme.typography.titleLarge,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis,
-                )
-                app.summary?.let {
-                    Spacer(Modifier.height(8.dp))
-                    Text(
-                        it,
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        maxLines = 3,
-                        overflow = TextOverflow.Ellipsis,
-                    )
+        Column(Modifier.padding(start = 24.dp, end = 24.dp, top = 28.dp, bottom = 24.dp)) {
+            // Only the app crossfades on shuffle; the buttons below stay put and morph instead.
+            val motion = MaterialTheme.motionScheme
+            AnimatedContent(
+                targetState = app,
+                contentKey = { it.packageName },
+                transitionSpec = { fadeIn(motion.defaultEffectsSpec()).togetherWith(fadeOut(motion.fastEffectsSpec())) },
+                label = "featuredApp",
+            ) { shown ->
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    AppIcon(shown, Modifier.size(80.dp))
+                    Spacer(Modifier.width(24.dp))
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            shown.name,
+                            style = MaterialTheme.typography.titleLarge,
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                        shown.summary?.let {
+                            Spacer(Modifier.height(8.dp))
+                            Text(
+                                it,
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.8f),
+                                maxLines = 3,
+                                overflow = TextOverflow.Ellipsis,
+                            )
+                        }
+                    }
                 }
             }
+            Spacer(Modifier.height(24.dp))
+            FeaturedActions(app, onDetails = onClick, onShuffle = onShuffle)
+        }
+    }
+}
+
+private val FeaturedButtonHeight = 48.dp
+/** Install's width at rest; the same as Cancel's, so it only slides over when a download starts. */
+private val FeaturedInstallWidth = CancelWidth
+
+/**
+ * The detail page's install button, compact here: while a download runs it slides over to make
+ * room for the progress bar, and Details steps aside. Installed apps get Open or Update but no
+ * Uninstall, which belongs on the detail page.
+ */
+@Composable
+private fun FeaturedActions(app: App, onDetails: () -> Unit, onShuffle: () -> Unit) {
+    val actions = appInstallActions(
+        packageName = app.packageName,
+        appName = app.name,
+        version = remember(app) { app.suggestedVersion() },
+        latestVersionCode = app.latestVersionCode,
+        allowUninstall = false,
+        // The detail page toasts failures; it may be open over Home for this very app.
+        reportFailures = false,
+    )
+    val busy = actions.state.busy
+    BoxWithConstraints(Modifier.fillMaxWidth()) {
+        // The shuffle button keeps its place, so everything else lives left of it.
+        val room = maxWidth - FeaturedButtonHeight - ActionGap
+        val slotTarget = when {
+            busy -> room
+            actions.state.trailing == TrailingAction.None -> 0.dp
+            else -> FeaturedInstallWidth
+        }
+        val slot = animateDpAsState(slotTarget, bouncySpring(), label = "featuredInstall").value.coerceIn(0.dp, room)
+        Row(Modifier.width(room), verticalAlignment = Alignment.CenterVertically) {
+            InstallActions(actions, Modifier.width(slot), height = FeaturedButtonHeight)
+            AnimatedVisibility(
+                visible = !busy,
+                enter = fadeIn() + expandHorizontally(),
+                exit = fadeOut() + shrinkHorizontally(),
+            ) {
+                TextButton(onClick = onDetails, modifier = Modifier.padding(start = ActionGap).height(FeaturedButtonHeight)) {
+                    Text(stringResource(R.string.featured_details), style = MaterialTheme.typography.titleMedium)
+                }
+            }
+        }
+        FilledIconButton(
+            onClick = onShuffle,
+            shape = RoundedCornerShape(16.dp),
+            colors = IconButtonDefaults.filledIconButtonColors(
+                containerColor = Layering.item,
+                contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
+            ),
+            modifier = Modifier.align(Alignment.CenterEnd).size(FeaturedButtonHeight),
+        ) {
+            Icon(Icons.Rounded.Shuffle, contentDescription = stringResource(R.string.featured_shuffle))
         }
     }
 }

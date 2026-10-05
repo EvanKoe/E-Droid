@@ -283,7 +283,7 @@ class FDroidRepository(
 
     companion object {
         private const val TAG = "FDroidRepository"
-        private const val APPS_CACHE_VERSION = 2
+        private const val APPS_CACHE_VERSION = 3
         private const val DETAILS_CACHE_SIZE = 16
     }
 }

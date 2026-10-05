@@ -102,6 +102,11 @@ class AppListViewModel(private val repository: RepoHub) : ViewModel() {
         refresh()
     }
 
+    /** Draws a new spotlight app without re-syncing. */
+    fun shuffleFeatured() {
+        featuredSeed.value = Random.nextLong()
+    }
+
     fun onSortSelected(order: AppSort) {
         sort.value = order
     }

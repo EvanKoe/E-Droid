@@ -22,10 +22,33 @@ data class App(
     val latestVersionName: String?,
     val latestVersionCode: Long?,
     val suggestedApkUrl: String?,
+    /** Hex sha256 of [suggestedApkUrl], so Install can start without reading the full index back. */
+    val suggestedApkSha256: String? = null,
+    val suggestedApkSize: Long? = null,
     val antiFeatures: Set<String>,
     /** [Repository.id] of the repo this row was read from, so details are looked up there. */
     val repoId: String,
 ) {
+    /**
+     * The version [suggestedApkUrl] points at, in the shape the installer takes; the same one the
+     * detail page preselects. Null when the row lacks anything Install needs.
+     */
+    fun suggestedVersion(): AppVersion? {
+        val url = suggestedApkUrl ?: return null
+        val sha256 = suggestedApkSha256 ?: return null
+        return AppVersion(
+            versionName = latestVersionName ?: return null,
+            versionCode = latestVersionCode ?: return null,
+            added = lastUpdated,
+            apkUrl = url,
+            sha256 = sha256,
+            sizeBytes = suggestedApkSize,
+            minSdk = null,
+            whatsNew = null,
+            antiFeatures = antiFeatures,
+        )
+    }
+
     companion object {
         fun from(
             packageName: String,
@@ -55,6 +78,8 @@ data class App(
                 latestVersionName = latest?.versionName,
                 latestVersionCode = latest?.versionCode,
                 suggestedApkUrl = latest?.let { repo.resolve(it.file) },
+                suggestedApkSha256 = latest?.file?.sha256,
+                suggestedApkSize = latest?.file?.size,
                 antiFeatures = latest?.antiFeatures?.keys ?: emptySet(),
                 repoId = repo.id,
             )

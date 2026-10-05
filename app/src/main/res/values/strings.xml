@@ -5,6 +5,8 @@
     <string name="nav_search">Search</string>
     <string name="nav_options">Options</string>
     <string name="home_featured_title">A random app you may like</string>
+    <string name="featured_details">Details</string>
+    <string name="featured_shuffle">Show another app</string>
     <string name="home_other_apps_title">Other apps</string>
     <string name="sort_by">Sort by</string>
     <string name="sort_newest">New apps</string>
