@@ -115,7 +115,7 @@ class FDroidRepository(
 
             _sync.value = SyncState.Loading(SyncState.Loading.Phase.FETCHING_ENTRY, null)
             val entry: Entry? = try {
-                service.fetchEntry(repo)
+                service.fetchEntry(repo).entry
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
@@ -151,6 +151,15 @@ class FDroidRepository(
             Log.e(TAG, "Refresh failed for ${repo.address}", e)
             _sync.value = SyncState.Error(e.message ?: e.javaClass.simpleName, e)
         }
+    }
+
+    /** Forgets the loaded index and deletes everything cached on disk for this repo. */
+    suspend fun deleteCache() = refreshMutex.withLock {
+        _snapshot.value = null
+        _sync.value = SyncState.Idle
+        detailsCache.evictAll()
+        withContext(Dispatchers.IO) { repoDir.deleteRecursively() }
+        Unit
     }
 
     /** The row for [packageName] in the current snapshot, if one is loaded. */
@@ -274,7 +283,7 @@ class FDroidRepository(
 
     companion object {
         private const val TAG = "FDroidRepository"
-        private const val APPS_CACHE_VERSION = 1
+        private const val APPS_CACHE_VERSION = 2
         private const val DETAILS_CACHE_SIZE = 16
     }
 }

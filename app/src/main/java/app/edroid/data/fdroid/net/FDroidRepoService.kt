@@ -1,7 +1,6 @@
 package app.edroid.data.fdroid.net
 
 import android.util.Log
-import app.edroid.data.fdroid.model.Entry
 import app.edroid.data.fdroid.model.EntryFileV2
 import app.edroid.data.fdroid.model.Repository
 import kotlinx.coroutines.CancellationException
@@ -33,8 +32,12 @@ class FDroidRepoService(
 ) {
     private val entryReader = SignedEntryReader(json)
 
-    /** Downloads and verifies `entry.jar`, returning the parsed [Entry]. */
-    suspend fun fetchEntry(repo: Repository): Entry = withContext(Dispatchers.IO) {
+    /**
+     * Downloads and verifies `entry.jar`, returning the parsed [Entry] and the fingerprint of the
+     * certificate that signed it. Throws [RepoVerificationException] when [Repository.fingerprint]
+     * is set and doesn't match.
+     */
+    suspend fun fetchEntry(repo: Repository): SignedEntryReader.Result = withContext(Dispatchers.IO) {
         tempDir.mkdirs()
         val jar = File.createTempFile("entry-", ".jar", tempDir)
         try {
@@ -42,7 +45,7 @@ class FDroidRepoService(
                 val body = response.body ?: throw IOException("Empty body for entry.jar")
                 body.byteStream().use { input -> jar.outputStream().use { input.copyTo(it) } }
             }
-            entryReader.read(jar, repo.fingerprint).entry
+            entryReader.read(jar, repo.fingerprint)
         } finally {
             jar.delete()
         }

@@ -23,6 +23,8 @@ data class App(
     val latestVersionCode: Long?,
     val suggestedApkUrl: String?,
     val antiFeatures: Set<String>,
+    /** [Repository.id] of the repo this row was read from, so details are looked up there. */
+    val repoId: String,
 ) {
     companion object {
         fun from(
@@ -54,6 +56,7 @@ data class App(
                 latestVersionCode = latest?.versionCode,
                 suggestedApkUrl = latest?.let { repo.resolve(it.file) },
                 antiFeatures = latest?.antiFeatures?.keys ?: emptySet(),
+                repoId = repo.id,
             )
         }
     }

@@ -49,7 +49,7 @@ fun CategoryScreen(
     modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
-    val repository = remember(context) { (context.applicationContext as EDroidApp).container.fdroidRepository }
+    val repository = remember(context) { (context.applicationContext as EDroidApp).container.repoHub }
     val snapshot by repository.snapshot.collectAsStateWithLifecycle()
     val apps = remember(snapshot, categoryId) {
         snapshot?.apps.orEmpty().filter { categoryId in it.categories }

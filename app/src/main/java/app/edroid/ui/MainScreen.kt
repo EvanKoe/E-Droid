@@ -62,6 +62,7 @@ import app.edroid.ui.components.ExpressiveNavBar
 import app.edroid.ui.components.NavBarItem
 import app.edroid.ui.options.OptionsScreen
 import app.edroid.ui.options.PermissionsDetailsScreen
+import app.edroid.ui.options.ReposScreen
 import app.edroid.ui.search.CategoryScreen
 import app.edroid.ui.search.SearchScreen
 import app.edroid.ui.theme.Layering
@@ -126,8 +127,8 @@ private fun <S> AnimatedContentTransitionScope<S?>.pageTransition(): ContentTran
  * Tapping an app opens its detail page on top of the tab, which stays composed underneath so its
  * scroll position survives; the nav bar gives way to a back bar until the page is closed. A
  * category from the Search tab opens the same way, one level below any detail page, so back from
- * an app returns to its category and back from the category returns to Search. The permissions
- * page opens from the Options tab the same way.
+ * an app returns to its category and back from the category returns to Search. The repositories
+ * and permissions pages open from the Options tab the same way.
  *
  * No tab has an app bar: each page carries its own heading as scrolling content (see
  * `PageTitle`), so a bar would only waste height at the top. A scrim mirroring the bottom one
@@ -144,6 +145,7 @@ fun MainScreen() {
     var openApp by rememberSaveable(stateSaver = OpenAppSaver) { mutableStateOf<OpenApp?>(null) }
     var openCategory by rememberSaveable(stateSaver = OpenCategorySaver) { mutableStateOf<OpenCategory?>(null) }
     var permissionsOpen by rememberSaveable { mutableStateOf(false) }
+    var reposOpen by rememberSaveable { mutableStateOf(false) }
     val tabs = HomeTab.entries
     val current = tabs[selectedIndex.coerceIn(0, tabs.lastIndex)]
     val haptics = LocalHapticFeedback.current
@@ -161,20 +163,23 @@ fun MainScreen() {
         keyboard?.hide()
         openCategory = OpenCategory(id, name)
     }
-    // Pops the topmost pushed page: the detail page first, then the category or permissions page.
+    // Pops the topmost pushed page: the detail page first, then the category, repos or permissions page.
     // Covers both the back bar and the system back gesture, so both get the same light tick.
     val goBack: () -> Unit = {
         haptics.performHapticFeedback(HapticFeedbackType.VirtualKey)
         when {
             openApp != null -> openApp = null
             openCategory != null -> openCategory = null
+            reposOpen -> reposOpen = false
             else -> permissionsOpen = false
         }
     }
-    BackHandler(enabled = openApp != null || openCategory != null || permissionsOpen, onBack = goBack)
+    BackHandler(enabled = openApp != null || openCategory != null || reposOpen || permissionsOpen, onBack = goBack)
     val permissionsTitle = stringResource(R.string.permissions_title)
+    val reposTitle = stringResource(R.string.repos_title)
     val backTarget = openApp?.let { BackTarget("app:${it.packageName}", it.name) }
         ?: openCategory?.let { BackTarget("category:${it.id}", it.name) }
+        ?: if (reposOpen) BackTarget("repos", reposTitle) else null
         ?: if (permissionsOpen) BackTarget("permissions", permissionsTitle) else null
     val surface = Layering.page
 
@@ -208,6 +213,10 @@ fun MainScreen() {
                 )
                 HomeTab.Options -> OptionsScreen(
                     contentPadding = contentPadding,
+                    onReposClick = {
+                        haptics.performHapticFeedback(HapticFeedbackType.VirtualKey)
+                        reposOpen = true
+                    },
                     onPermissionsClick = { permissionsOpen = true },
                 )
             }
@@ -239,6 +248,15 @@ fun MainScreen() {
             label = "permissions",
         ) { open ->
             if (open != null) PermissionsDetailsScreen(contentPadding = contentPadding)
+        }
+
+        AnimatedContent(
+            targetState = reposOpen.takeIf { it },
+            modifier = Modifier.fillMaxSize(),
+            transitionSpec = { pageTransition() },
+            label = "repos",
+        ) { open ->
+            if (open != null) ReposScreen(contentPadding = contentPadding)
         }
 
         AnimatedContent(

@@ -22,6 +22,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowRight
 import androidx.compose.material.icons.rounded.Coffee
 import androidx.compose.material.icons.rounded.Security
+import androidx.compose.material.icons.rounded.Storage
 import androidx.compose.material.icons.rounded.Vibration
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
@@ -59,11 +60,13 @@ import app.edroid.ui.theme.groupedShape
  * App settings, as a grouped list of entries that each open their own page.
  *
  * @param contentPadding insets handed down by `MainScreen` so content clears both scrims.
+ * @param onReposClick opens the repositories page.
  * @param onPermissionsClick opens the permissions explanation page.
  */
 @Composable
 fun OptionsScreen(
     contentPadding: PaddingValues,
+    onReposClick: () -> Unit,
     onPermissionsClick: () -> Unit,
     viewModel: OptionsViewModel = viewModel(factory = OptionsViewModel.Factory),
 ) {
@@ -86,10 +89,17 @@ fun OptionsScreen(
         PageTitle(text = stringResource(R.string.options_title))
         SectionTitle(stringResource(R.string.options_general))
         OptionItem(
+            icon = Icons.Rounded.Storage,
+            title = stringResource(R.string.options_repos),
+            summary = stringResource(R.string.options_repos_summary),
+            shape = groupedShape(isFirst = true),
+            onClick = onReposClick,
+        )
+        OptionItem(
             icon = Icons.Rounded.Security,
             title = stringResource(R.string.options_permissions),
             summary = stringResource(R.string.options_permissions_summary),
-            shape = groupedShape(isFirst = true),
+            shape = groupedShape(),
             onClick = onPermissionsClick,
         )
         SwitchOptionItem(

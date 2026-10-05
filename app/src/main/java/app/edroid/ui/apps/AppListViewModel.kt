@@ -8,7 +8,7 @@ import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
 import app.edroid.EDroidApp
 import app.edroid.R
-import app.edroid.data.fdroid.FDroidRepository
+import app.edroid.data.fdroid.RepoHub
 import app.edroid.data.fdroid.RepoInfo
 import app.edroid.data.fdroid.SyncState
 import app.edroid.data.fdroid.model.App
@@ -55,7 +55,7 @@ private data class HomeContent(
     val repo: RepoInfo?,
 )
 
-class AppListViewModel(private val repository: FDroidRepository) : ViewModel() {
+class AppListViewModel(private val repository: RepoHub) : ViewModel() {
 
     // Seeds the spotlight pick so it stays put across index refreshes and recompositions, and only
     // changes when the user asks for a new one by pulling to refresh.
@@ -110,7 +110,7 @@ class AppListViewModel(private val repository: FDroidRepository) : ViewModel() {
         val Factory: ViewModelProvider.Factory = viewModelFactory {
             initializer {
                 val app = this[ViewModelProvider.AndroidViewModelFactory.APPLICATION_KEY] as EDroidApp
-                AppListViewModel(app.container.fdroidRepository)
+                AppListViewModel(app.container.repoHub)
             }
         }
     }

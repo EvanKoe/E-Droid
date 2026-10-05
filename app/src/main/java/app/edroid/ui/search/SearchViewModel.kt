@@ -7,7 +7,7 @@ import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
 import app.edroid.EDroidApp
 import app.edroid.data.RecentSearchesStore
-import app.edroid.data.fdroid.FDroidRepository
+import app.edroid.data.fdroid.RepoHub
 import app.edroid.data.fdroid.model.App
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -29,7 +29,7 @@ data class SearchUiState(
 }
 
 class SearchViewModel(
-    private val repository: FDroidRepository,
+    private val repository: RepoHub,
     private val recentSearches: RecentSearchesStore,
 ) : ViewModel() {
 
@@ -72,7 +72,7 @@ class SearchViewModel(
         val Factory: ViewModelProvider.Factory = viewModelFactory {
             initializer {
                 val app = this[ViewModelProvider.AndroidViewModelFactory.APPLICATION_KEY] as EDroidApp
-                SearchViewModel(app.container.fdroidRepository, app.container.recentSearches)
+                SearchViewModel(app.container.repoHub, app.container.recentSearches)
             }
         }
     }
