@@ -16,6 +16,7 @@
     <string name="action_remove_recent">Remove from recent searches</string>
     <string name="recent_searches">Recent searches</string>
     <string name="categories">Categories</string>
+    <string name="search_all_repos">All repos</string>
     <string name="search_index_loading">Waiting for the package index…</string>
     <string name="options_title">Options</string>
     <string name="options_general">General</string>

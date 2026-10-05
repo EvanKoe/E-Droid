@@ -19,17 +19,21 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.Clear
 import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
+import androidx.compose.material3.FilterChip
+import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -75,7 +79,8 @@ import app.edroid.ui.theme.groupedShapeAt
 
 /**
  * Search tab: page heading, a search field, then either the browse view (recent searches +
- * categories) or, once the user types, the matching apps.
+ * categories) or, once the user types, the matching apps. With several repos enabled, a row of
+ * chips under the field narrows the results to one of them.
  *
  * @param contentPadding insets handed down by `MainScreen` so content clears both scrims.
  * @param focusRequest a counter `MainScreen` bumps when the Search tab is re-tapped while already
@@ -119,6 +124,9 @@ fun SearchScreen(
     val activeListState = if (state.showResults) resultsListState else browseListState
     val scrimHeightPx = with(LocalDensity.current) { FieldScrimHeight.toPx() }
 
+    // A different repo is a different list; start it from the top.
+    LaunchedEffect(state.selectedRepoId) { resultsListState.scrollToItem(0) }
+
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -140,6 +148,14 @@ fun SearchScreen(
             onClear = viewModel::clearQuery,
             modifier = Modifier.focusRequester(fieldFocus),
         )
+        if (state.showResults && state.repos.size > 1) {
+            RepoFilterRow(
+                repos = state.repos,
+                selectedId = state.selectedRepoId,
+                onSelected = viewModel::onRepoSelected,
+                modifier = Modifier.padding(top = 8.dp),
+            )
+        }
 
         Box(Modifier.weight(1f).fillMaxWidth()) {
             if (state.showResults) {
@@ -219,6 +235,41 @@ private fun SearchField(
         ),
         keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
         keyboardActions = KeyboardActions(onSearch = { onSearch() }),
+    )
+}
+
+/** "All" followed by one chip per enabled repo; at most one is selected. */
+@Composable
+private fun RepoFilterRow(
+    repos: List<Pair<String, String>>,
+    selectedId: String?,
+    onSelected: (String?) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    LazyRow(modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        item(key = "all") {
+            RepoChip(stringResource(R.string.search_all_repos), selected = selectedId == null, onClick = { onSelected(null) })
+        }
+        items(repos, key = { it.first }) { (id, name) ->
+            RepoChip(name, selected = id == selectedId, onClick = { onSelected(id) })
+        }
+    }
+}
+
+@Composable
+private fun RepoChip(label: String, selected: Boolean, onClick: () -> Unit) {
+    FilterChip(
+        selected = selected,
+        onClick = onClick,
+        label = { Text(label, maxLines = 1, overflow = TextOverflow.Ellipsis) },
+        leadingIcon = if (selected) {
+            { Icon(Icons.Rounded.Check, contentDescription = null, modifier = Modifier.size(FilterChipDefaults.IconSize)) }
+        } else {
+            null
+        },
+        shape = MaterialTheme.shapes.large,
+        colors = FilterChipDefaults.filterChipColors(containerColor = Layering.item),
+        border = null,
     )
 }
 

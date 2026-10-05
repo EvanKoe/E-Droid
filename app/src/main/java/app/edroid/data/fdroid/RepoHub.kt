@@ -52,6 +52,20 @@ class RepoHub(
         .flowOn(Dispatchers.Default)
         .stateIn(scope, SharingStarted.Eagerly, null)
 
+    /**
+     * Each enabled repo next to its own, unmerged snapshot (null until loaded), in [RepoStore]
+     * order. Unlike [snapshot], an app listed by several repos shows up under every one of them.
+     */
+    val perRepo: StateFlow<List<Pair<Repository, RepoSnapshot?>>> = enabled
+        .flatMapLatest { list ->
+            if (list.isEmpty()) {
+                flowOf(emptyList())
+            } else {
+                combine(list.map { (repo, loader) -> loader.snapshot.map { repo to it } }) { it.toList() }
+            }
+        }
+        .stateIn(scope, SharingStarted.Eagerly, emptyList())
+
     val sync: StateFlow<SyncState> = enabled
         .flatMapLatest { list ->
             if (list.isEmpty()) {
