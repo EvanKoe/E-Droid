@@ -31,6 +31,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Home
 import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material.icons.rounded.Settings
+import androidx.compose.material.icons.rounded.Update
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -69,6 +70,7 @@ import app.edroid.ui.search.CategoryScreen
 import app.edroid.ui.search.SearchScreen
 import app.edroid.ui.theme.Layering
 import app.edroid.ui.theme.PageHorizontalPadding
+import app.edroid.ui.updates.UpdatesScreen
 
 /** The top-level tabs, in the order the nav bar shows them. */
 private enum class HomeTab(
@@ -78,6 +80,7 @@ private enum class HomeTab(
     Home(R.string.nav_home, Icons.Rounded.Home),
     Search(R.string.nav_search, Icons.Rounded.Search),
     Git(R.string.nav_git, GitIcon),
+    Updates(R.string.nav_updates, Icons.Rounded.Update),
     Options(R.string.nav_options, Icons.Rounded.Settings),
 }
 
@@ -125,7 +128,7 @@ private fun <S> AnimatedContentTransitionScope<S?>.pageTransition(): ContentTran
 
 /**
  * Root of the in-app UI: the current tab's content between a top and a bottom scrim, and a
- * floating expressive navigation bar switching between Home, Search, Git and Options.
+ * floating expressive navigation bar switching between Home, Search, Updates, Git and Options.
  *
  * Tapping an app opens its detail page on top of the tab, which stays composed underneath so its
  * scroll position survives; the nav bar gives way to a back bar until the page is closed. A
@@ -207,7 +210,15 @@ fun MainScreen() {
             label = "homeTab",
         ) { tab ->
             when (tab) {
-                HomeTab.Home -> AppListScreen(contentPadding = contentPadding, onAppClick = onAppClick)
+                HomeTab.Home -> AppListScreen(
+                    contentPadding = contentPadding,
+                    onAppClick = onAppClick,
+                    onUpdatesClick = {
+                        haptics.performHapticFeedback(HapticFeedbackType.VirtualKey)
+                        searchFocusRequest = 0
+                        selectedIndex = HomeTab.Updates.ordinal
+                    },
+                )
                 HomeTab.Search -> SearchScreen(
                     contentPadding = contentPadding,
                     focusRequest = searchFocusRequest,
@@ -215,6 +226,11 @@ fun MainScreen() {
                     onCategoryClick = onCategoryClick,
                 )
                 HomeTab.Git -> GitScreen(contentPadding = contentPadding)
+                HomeTab.Updates -> UpdatesScreen(
+                    contentPadding = contentPadding,
+                    detailPackageName = openApp?.packageName,
+                    onAppClick = onAppClick,
+                )
                 HomeTab.Options -> OptionsScreen(
                     contentPadding = contentPadding,
                     onReposClick = {

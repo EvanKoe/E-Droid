@@ -1,5 +1,14 @@
 package app.edroid.ui.apps
 
+import android.content.Intent
+import android.provider.Settings
+import androidx.compose.foundation.background
+import androidx.compose.material.icons.rounded.Power
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.ui.platform.LocalContext
+import androidx.core.net.toUri
+import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.animateDpAsState
@@ -42,6 +51,7 @@ import androidx.compose.foundation.lazy.grid.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.rounded.ArrowForward
 import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.KeyboardArrowDown
 import androidx.compose.material.icons.rounded.Warning
@@ -72,6 +82,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -86,6 +97,8 @@ import app.edroid.ui.components.SectionTitle
 import app.edroid.ui.theme.GroupedItemSpacing
 import app.edroid.ui.theme.Layering
 import app.edroid.ui.theme.gridGroupedShapeAt
+import app.edroid.ui.updates.AppUpdate
+import app.edroid.ui.updates.UpdatesViewModel
 import coil3.compose.AsyncImage
 
 /** Apps per row in the "Other apps" grid. */
@@ -94,9 +107,15 @@ private const val GRID_COLUMNS = 3
 /** Corner radius of the standalone spotlight card. */
 private val FeaturedCardRadius = 32.dp
 
+/** App icons previewed on the updates card. */
+private const val UPDATE_ICONS_SHOWN = 3
+
+/** Corner radius of the compact updates card; smaller than the spotlight's to match its height. */
+private val UpdatesCardRadius = 24.dp
+
 /**
- * Home tab: the EDroid wordmark, a random app in the spotlight, then every other app as a grid of
- * icon tiles. The wordmark is the first item of the grid so it scrolls away under the top scrim
+ * Home tab: the EDroid wordmark, a random app in the spotlight, a compact card for pending updates
+ * when installed apps have any, then every other app as a grid of icon tiles. The wordmark is the first item of the grid so it scrolls away under the top scrim
  * like any other content.
  *
  * While an index is already on screen, a refresh only adds a slim progress strip (or a compact
@@ -105,20 +124,35 @@ private val FeaturedCardRadius = 32.dp
  *
  * @param contentPadding insets handed down by `MainScreen` so content clears both scrims.
  * @param onAppClick opens an app's detail page.
+ * @param onUpdatesClick switches to the Updates tab.
  */
 @Composable
 fun AppListScreen(
     contentPadding: PaddingValues,
     onAppClick: (App) -> Unit,
+    onUpdatesClick: () -> Unit,
     viewModel: AppListViewModel = viewModel(factory = AppListViewModel.Factory),
+    // The Updates tab's view model (same activity store), so the card matches that tab's list.
+    updatesViewModel: UpdatesViewModel = viewModel(factory = UpdatesViewModel.Factory),
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
+    val updates = updatesViewModel.uiState.collectAsStateWithLifecycle().value.updates.orEmpty()
 
     // Only a pull-initiated refresh drives the pull indicator; background syncs keep using the
     // inline strip so the indicator doesn't pop in on its own. Cleared once the sync settles.
     var pullRefreshing by remember { mutableStateOf(false) }
     val syncing = state.sync is SyncState.Loading
     LaunchedEffect(syncing) { if (!syncing) pullRefreshing = false }
+
+    // Re-checked on every resume, since the user grants it in system Settings and comes back.
+    val context = LocalContext.current
+    var canInstall by remember { mutableStateOf(true) }
+    // Hidden until the app process restarts.
+    var installCardHidden by rememberSaveable { mutableStateOf(false) }
+    LifecycleResumeEffect(Unit) {
+        canInstall = context.packageManager.canRequestPackageInstalls()
+        onPauseOrDispose { }
+    }
 
     val pullState = rememberPullToRefreshState()
     PullToRefreshBox(
@@ -147,6 +181,17 @@ fun AppListScreen(
             verticalArrangement = Arrangement.spacedBy(GroupedItemSpacing),
         ) {
             fullLineItem(key = "logo") { LogoHeader() }
+            if (!canInstall && !installCardHidden) fullLineItem(key = "install-permission") {
+                InstallPermissionCard(
+                    animateGridItem(),
+                    onHide = { installCardHidden = true },
+                    onGrant = {
+                        context.startActivity(
+                            Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES, "package:${context.packageName}".toUri()),
+                        )
+                    },
+                )
+            }
             // Loading and error variants use distinct keys so a switch between them crossfades
             // rather than swapping content inside the same slot.
             val sync = state.sync
@@ -162,7 +207,10 @@ fun AppListScreen(
                     }
                     SyncState.Idle -> Unit
                 }
-                homeItems(state.featured, state.apps, state.sort, viewModel::onSortSelected, viewModel::shuffleFeatured, onAppClick)
+                homeItems(
+                    state.featured, updates, state.apps, state.sort,
+                    viewModel::onSortSelected, viewModel::shuffleFeatured, onUpdatesClick, onAppClick,
+                )
             } else {
                 when (sync) {
                     is SyncState.Loading -> fullLineItem(key = "loading") {
@@ -195,13 +243,117 @@ private fun LogoHeader() {
     }
 }
 
-/** The spotlight card and the grid of every other app, or an empty-state line. */
+/**
+ * Tonal card shown while EDroid can't install apps: a plug badge beside the explanation, then Hide
+ * and Grant it, which opens the grant screen.
+ */
+@Composable
+private fun InstallPermissionCard(modifier: Modifier = Modifier, onHide: () -> Unit, onGrant: () -> Unit) {
+    val colors = MaterialTheme.colorScheme
+    Card(
+        modifier = modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(FeaturedCardRadius),
+        colors = CardDefaults.cardColors(
+            containerColor = colors.secondaryContainer,
+            contentColor = colors.onSecondaryContainer,
+        ),
+    ) {
+        Column(Modifier.padding(start = 24.dp, end = 24.dp, top = 24.dp, bottom = 20.dp)) {
+            Row {
+                Box(
+                    Modifier.size(56.dp).clip(CircleShape).background(colors.secondary),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Icon(Icons.Rounded.Power, contentDescription = null, tint = colors.onSecondary)
+                }
+                Spacer(Modifier.width(20.dp))
+                Column(Modifier.weight(1f)) {
+                    Text(stringResource(R.string.home_install_permission_title), style = MaterialTheme.typography.titleLarge)
+                    Spacer(Modifier.height(8.dp))
+                    Text(stringResource(R.string.home_install_permission_body), style = MaterialTheme.typography.bodyMedium)
+                }
+            }
+            Spacer(Modifier.height(16.dp))
+            Row(
+                Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End),
+            ) {
+                TextButton(onClick = onHide) {
+                    Text(stringResource(R.string.home_install_permission_hide), color = colors.secondary)
+                }
+                Button(
+                    onClick = onGrant,
+                    colors = ButtonDefaults.buttonColors(containerColor = colors.secondary, contentColor = colors.onSecondary),
+                ) {
+                    Text(stringResource(R.string.home_install_permission_grant))
+                }
+            }
+        }
+    }
+}
+
+/** Section title and compact card for pending updates, between the spotlight and the grid. */
+private fun LazyGridScope.updatesItems(updates: List<AppUpdate>, onClick: () -> Unit) {
+    fullLineItem(key = "updates-title") {
+        SectionTitle(stringResource(R.string.home_updates_title), modifier = animateGridItem().padding(top = 16.dp))
+    }
+    fullLineItem(key = "updates") {
+        UpdatesCard(updates, onClick = onClick, modifier = animateGridItem())
+    }
+}
+
+/**
+ * One-row tonal card on the primary container, so it reads apart from the spotlight: a few of the
+ * apps' icons, how many can be updated, and an arrow hinting that the card leads to the Updates tab.
+ */
+@Composable
+private fun UpdatesCard(updates: List<AppUpdate>, onClick: () -> Unit, modifier: Modifier = Modifier) {
+    Card(
+        onClick = onClick,
+        modifier = modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(UpdatesCardRadius),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.primaryContainer,
+            contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+        ),
+    ) {
+        Row(
+            modifier = Modifier.padding(start = 16.dp, end = 12.dp, top = 12.dp, bottom = 12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                updates.take(UPDATE_ICONS_SHOWN).forEach { AppIcon(it.app, Modifier.size(32.dp)) }
+            }
+            Spacer(Modifier.width(12.dp))
+            Column(Modifier.weight(1f)) {
+                Text(
+                    pluralStringResource(R.plurals.updates_count, updates.size, updates.size),
+                    style = MaterialTheme.typography.titleSmall,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                Text(
+                    stringResource(R.string.updates_see_more),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.8f),
+                    maxLines = 1,
+                )
+            }
+            Spacer(Modifier.width(8.dp))
+            Icon(Icons.AutoMirrored.Rounded.ArrowForward, contentDescription = null, modifier = Modifier.size(20.dp))
+        }
+    }
+}
+
+/** The spotlight card, any pending updates, and the grid of every other app, or an empty-state line. */
 private fun LazyGridScope.homeItems(
     featured: App?,
+    updates: List<AppUpdate>,
     apps: List<App>,
     sort: AppSort,
     onSortSelected: (AppSort) -> Unit,
     onShuffle: () -> Unit,
+    onUpdatesClick: () -> Unit,
     onAppClick: (App) -> Unit,
 ) {
     if (featured == null) {
@@ -221,10 +373,11 @@ private fun LazyGridScope.homeItems(
     fullLineItem(key = "featured") {
         FeaturedAppCard(featured, onClick = { onAppClick(featured) }, onShuffle = onShuffle, modifier = animateGridItem())
     }
+    if (updates.isNotEmpty()) updatesItems(updates, onUpdatesClick)
     if (apps.isEmpty()) return
     fullLineItem(key = "others-title") {
         Row(
-            modifier = Modifier.fillMaxWidth().padding(top = 32.dp),
+            modifier = Modifier.fillMaxWidth().padding(top = 16.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             SectionTitle(

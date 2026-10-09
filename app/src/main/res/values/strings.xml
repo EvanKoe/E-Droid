@@ -25,11 +25,24 @@
     <string name="git_choose_apk">Which APK?</string>
     <string name="git_choose_apk_intro">This release has several APK files. Pick the one that fits your device.</string>
     <string name="git_choose_needed">Pick an APK file to continue</string>
+    <string name="nav_updates">Updates</string>
     <string name="nav_options">Options</string>
+    <string name="updates_title">Updates</string>
+    <string name="home_updates_title">Updates available</string>
+    <string name="updates_see_more">Tap to see more</string>
+    <string name="home_install_permission_title">We can’t install apps</string>
+    <string name="home_install_permission_body">We’re missing the permission to install apps. Click here to grant it</string>
+    <string name="home_install_permission_hide">Hide</string>
+    <string name="home_install_permission_grant">Grant it</string>
+    <string name="updates_none">All your apps are up to date</string>
+    <plurals name="updates_count">
+        <item quantity="one">%1$d app can be updated</item>
+        <item quantity="other">%1$d apps can be updated</item>
+    </plurals>
     <string name="home_featured_title">A random app you may like</string>
     <string name="featured_details">Details</string>
     <string name="featured_shuffle">Show another app</string>
-    <string name="home_other_apps_title">Other apps</string>
+    <string name="home_other_apps_title">Browse</string>
     <string name="sort_by">Sort by</string>
     <string name="sort_newest">New apps</string>
     <string name="sort_updated">Recently updated</string>
