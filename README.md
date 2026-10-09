@@ -15,12 +15,12 @@ E-Droid is a Material Expressive client for F-Droid. Download, search, filter, a
 Browse the free and open-source apps of F-Droid (and any other F-Droid compatible repo) in an app that actually feels like modern Android.
 
 ## Features
-- 🎨 Material 3 Expressive design with dynamic colors
-- 🔍 Search with recent searches
-- 🗂️ Browse apps by category
-- 📦 Add multiple F-Droid repositories and filter apps by repo
-- ⬇️ Download and install apps directly
-- 🔐 Signed repository index verification
+- Material 3 Expressive design with dynamic colors
+- Search with recent searches
+- Browse apps by category
+- Add multiple F-Droid repositories and filter apps by repo
+- Download and install apps directly
+- Signed repository index verification
 
 ## Screenshots
 ||||
