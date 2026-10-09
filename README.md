@@ -29,8 +29,8 @@ Browse the free and open-source apps of F-Droid (and any other F-Droid compatibl
 | <img width="1080" height="2410" alt="Screenshot_20261005-145844" src="https://github.com/user-attachments/assets/9b5d3f61-97d9-4604-bf39-148b8c17b7c9" /> | <img width="1080" height="2410" alt="Screenshot_20261005-145855" src="https://github.com/user-attachments/assets/25132ea0-024d-4b2d-8c38-c8a57a78ad2d" /> ||
 
 ## Support
-- 💬 Join the [Discord server](https://discord.gg/SNfcuuJeYF)
-- ☕ [Buy me a coffee](https://buymeacoffee.com/evankoe)
-- ⭐ Star the repo if you like it!
+- Join the [Discord server](https://discord.gg/SNfcuuJeYF)
+- [Buy me a coffee](https://buymeacoffee.com/evankoe)
+- Star the repo if you like it!
 
 > Warning: I used AI to help me building this app
