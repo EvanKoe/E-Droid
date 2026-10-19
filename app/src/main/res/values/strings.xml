@@ -11,6 +11,15 @@
     <string name="git_link_hint">https://github.com/owner/repo</string>
     <string name="git_error_invalid">Enter a github.com link or owner/repo</string>
     <string name="git_error_duplicate">This repository is already in the list</string>
+    <string name="git_error_no_apk">The latest release has no APK</string>
+    <string name="git_error_not_apk">The downloaded file is not a valid APK</string>
+    <string name="git_error_network">Couldn\'t check the release: %1$s</string>
+    <string name="git_checking">Checking releases…</string>
+    <string name="git_downloading_percent">Downloading %1$d%%</string>
+    <string name="git_latest">Latest: %1$s</string>
+    <string name="git_choose_apk">Which APK?</string>
+    <string name="git_choose_apk_intro">This release has several APK files. Pick the one that fits your device.</string>
+    <string name="git_choose_needed">Pick an APK file to continue</string>
     <string name="nav_options">Options</string>
     <string name="home_featured_title">A random app you may like</string>
     <string name="featured_details">Details</string>

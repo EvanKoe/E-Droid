@@ -1,6 +1,7 @@
 package app.edroid
 
 import android.app.Application
+import app.edroid.data.github.GitHubReleaseWorker
 import coil3.ImageLoader
 import coil3.PlatformContext
 import coil3.SingletonImageLoader
@@ -17,6 +18,7 @@ class EDroidApp : Application(), SingletonImageLoader.Factory {
     override fun onCreate() {
         super.onCreate()
         container = AppContainer(this)
+        GitHubReleaseWorker.schedule(this)
     }
 
     /** Coil image loader for app icons, sharing the OkHttp client and caching icons on disk. */

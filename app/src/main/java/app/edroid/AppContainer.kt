@@ -8,6 +8,7 @@ import app.edroid.data.fdroid.FDroidRepository
 import app.edroid.data.fdroid.RepoHub
 import app.edroid.data.fdroid.net.FDroidRepoService
 import app.edroid.data.fdroid.parser.IndexV2StreamParser
+import app.edroid.data.github.GitHubReleaseChecker
 import app.edroid.data.github.GitHubReleaseService
 import app.edroid.data.github.GitHubRepoStore
 import app.edroid.data.install.ApkInstaller
@@ -34,6 +35,10 @@ class AppContainer(context: Context) {
     val gitHubReleases = GitHubReleaseService(okHttpClient, json)
 
     val gitHubRepos = GitHubRepoStore(context, json)
+
+    val gitHubApkDir = context.cacheDir.resolve("github")
+
+    val gitHubChecker = GitHubReleaseChecker(context, gitHubRepos, gitHubReleases, gitHubApkDir)
 
     val recentSearches = RecentSearchesStore(context, json)
 

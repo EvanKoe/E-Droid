@@ -58,6 +58,7 @@ import app.edroid.data.install.installedVersionCode
 import app.edroid.data.install.installedVersionCodeNow
 import app.edroid.data.install.openApp
 import app.edroid.data.install.requestUninstall
+import java.io.File
 
 /** Everything [InstallActions] needs for one package: what to show and what each button does. */
 internal class AppInstallActions(
@@ -78,6 +79,7 @@ internal class AppInstallActions(
  * @param allowUninstall whether an installed app offers Uninstall beside Open or Update.
  * @param reportFailures toasts install failures. Only one caller per package should, or a page
  *   drawn over another showing the same app toasts twice.
+ * @param installSource an already downloaded APK to install instead of fetching [version], if any.
  */
 @Composable
 internal fun appInstallActions(
@@ -87,6 +89,7 @@ internal fun appInstallActions(
     latestVersionCode: Long?,
     allowUninstall: Boolean = true,
     reportFailures: Boolean = true,
+    installSource: () -> File? = { null },
 ): AppInstallActions {
     val context = LocalContext.current
     val installer = remember(context) { (context.applicationContext as EDroidApp).container.apkInstaller }
@@ -124,7 +127,7 @@ internal fun appInstallActions(
             ) {
                 notificationPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
             }
-            version?.let { installer.install(packageName, appName, it) }
+            version?.let { installer.install(packageName, appName, it, installSource()) }
         },
         onOpen = { context.openApp(packageName) },
         onUninstall = { context.requestUninstall(packageName) },

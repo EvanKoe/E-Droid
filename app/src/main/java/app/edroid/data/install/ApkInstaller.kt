@@ -37,7 +37,9 @@ import kotlinx.coroutines.launch
 import okhttp3.Call
 import okhttp3.OkHttpClient
 import okhttp3.Request
+import java.io.File
 import java.io.IOException
+import java.io.InputStream
 import java.security.MessageDigest
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicInteger
@@ -123,8 +125,11 @@ class ApkInstaller(private val context: Context, private val client: OkHttpClien
     /** The download whose notification [DownloadService] shows; null once none is left. */
     internal val foreground: StateFlow<DownloadNotification?> = _foreground.asStateFlow()
 
-    /** Starts installing (or updating to) [version]; ignored while that package is already in flight. */
-    fun install(packageName: String, appName: String, version: AppVersion) {
+    /**
+     * Starts installing (or updating to) [version]; ignored while that package is already in flight.
+     * An existing [source] APK is installed instead of downloading, and deleted once committed.
+     */
+    fun install(packageName: String, appName: String, version: AppVersion, source: File? = null) {
         val current = _states.value[packageName]
         if (current is InstallState.Downloading || current is InstallState.Installing) return
         val download = Download(Session(packageName, appName), nextNotificationId.getAndDecrement())
@@ -137,7 +142,7 @@ class ApkInstaller(private val context: Context, private val client: OkHttpClien
         }
         download.job = scope.launch {
             try {
-                downloadAndCommit(download.target, version, download)
+                downloadAndCommit(download.target, version, download, source)
             } catch (e: Exception) {
                 // A cancelled call surfaces as an IOException; cancellation is reported below instead.
                 if (isActive) set(packageName, InstallState.Failed(e.message ?: e.javaClass.simpleName))
@@ -171,7 +176,33 @@ class ApkInstaller(private val context: Context, private val client: OkHttpClien
         }
     }
 
-    private suspend fun downloadAndCommit(target: Session, version: AppVersion, download: Download) {
+    /** Copies [input] into the session's base.apk, reporting progress; returns the SHA-256 as lowercase hex. */
+    private suspend fun writeApk(session: PackageInstaller.Session, input: InputStream, total: Long?, download: Download): String {
+        val digest = MessageDigest.getInstance("SHA-256")
+        session.openWrite("base.apk", 0, total ?: -1).use { out ->
+            val buffer = ByteArray(64 * 1024)
+            var read = 0L
+            var lastPercent = -1
+            while (true) {
+                currentCoroutineContext().ensureActive()
+                val n = input.read(buffer)
+                if (n < 0) break
+                out.write(buffer, 0, n)
+                digest.update(buffer, 0, n)
+                read += n
+                // One update per percent, not per buffer.
+                val percent = total?.let { (read * 100 / it).toInt() }
+                if (percent != null && percent != lastPercent) {
+                    lastPercent = percent
+                    setDownloading(download, percent / 100f)
+                }
+            }
+            session.fsync(out)
+        }
+        return digest.digest().joinToString("") { "%02x".format(it) }
+    }
+
+    private suspend fun downloadAndCommit(target: Session, version: AppVersion, download: Download, source: File?) {
         val packageName = target.packageName
         val installer = context.packageManager.packageInstaller
         val params = PackageInstaller.SessionParams(PackageInstaller.SessionParams.MODE_FULL_INSTALL).apply {
@@ -183,43 +214,27 @@ class ApkInstaller(private val context: Context, private val client: OkHttpClien
         val sessionId = installer.createSession(params)
         val session = installer.openSession(sessionId)
         try {
-            val call = client.newCall(Request.Builder().url(version.apkUrl).build())
-            download.call = call
-            currentCoroutineContext().ensureActive()
-            call.execute().use { response ->
-                if (!response.isSuccessful) throw IOException("Download failed (HTTP ${response.code})")
-                val body = response.body
-                val total = body.contentLength().takeIf { it > 0 } ?: version.sizeBytes
-                val digest = MessageDigest.getInstance("SHA-256")
-                session.openWrite("base.apk", 0, total ?: -1).use { out ->
-                    body.byteStream().use { input ->
-                        val buffer = ByteArray(64 * 1024)
-                        var read = 0L
-                        var lastPercent = -1
-                        while (true) {
-                            currentCoroutineContext().ensureActive()
-                            val n = input.read(buffer)
-                            if (n < 0) break
-                            out.write(buffer, 0, n)
-                            digest.update(buffer, 0, n)
-                            read += n
-                            // One update per percent, not per buffer.
-                            val percent = total?.let { (read * 100 / it).toInt() }
-                            if (percent != null && percent != lastPercent) {
-                                lastPercent = percent
-                                setDownloading(download, percent / 100f)
-                            }
-                        }
-                    }
-                    session.fsync(out)
+            val local = source?.takeIf { it.exists() }
+            val hash = if (local != null) {
+                currentCoroutineContext().ensureActive()
+                local.inputStream().use { writeApk(session, it, local.length(), download) }
+            } else {
+                val call = client.newCall(Request.Builder().url(version.apkUrl).build())
+                download.call = call
+                currentCoroutineContext().ensureActive()
+                call.execute().use { response ->
+                    if (!response.isSuccessful) throw IOException("Download failed (HTTP ${response.code})")
+                    val body = response.body
+                    writeApk(session, body.byteStream(), body.contentLength().takeIf { it > 0 } ?: version.sizeBytes, download)
                 }
-                val hash = digest.digest().joinToString("") { "%02x".format(it) }
-                if (!hash.equals(version.sha256, ignoreCase = true)) throw IOException("Checksum mismatch, download rejected")
             }
+            if (!hash.equals(version.sha256, ignoreCase = true)) throw IOException("Checksum mismatch, download rejected")
             currentCoroutineContext().ensureActive()
             set(packageName, InstallState.Installing)
             sessions[sessionId] = target
             session.commit(InstallResultReceiver.intentSender(context, sessionId))
+            // Its bytes are in the session now; kept on any failure above so a retry can reuse it.
+            if (local != null) runCatching { local.delete() }
         } catch (e: Throwable) {
             sessions.remove(sessionId)
             // Already gone if cancel() withdrew it first.
