@@ -59,7 +59,9 @@ import app.edroid.ui.details.AppDetailScreen
 import app.edroid.ui.details.DetailBackBar
 import app.edroid.ui.components.EmphasizedEasing
 import app.edroid.ui.components.ExpressiveNavBar
+import app.edroid.ui.components.GitIcon
 import app.edroid.ui.components.NavBarItem
+import app.edroid.ui.git.GitScreen
 import app.edroid.ui.options.OptionsScreen
 import app.edroid.ui.options.PermissionsDetailsScreen
 import app.edroid.ui.options.ReposScreen
@@ -68,13 +70,14 @@ import app.edroid.ui.search.SearchScreen
 import app.edroid.ui.theme.Layering
 import app.edroid.ui.theme.PageHorizontalPadding
 
-/** The three top-level tabs, in the order the nav bar shows them. */
+/** The top-level tabs, in the order the nav bar shows them. */
 private enum class HomeTab(
     @param:StringRes val labelRes: Int,
     val icon: ImageVector,
 ) {
     Home(R.string.nav_home, Icons.Rounded.Home),
     Search(R.string.nav_search, Icons.Rounded.Search),
+    Git(R.string.nav_git, GitIcon),
     Options(R.string.nav_options, Icons.Rounded.Settings),
 }
 
@@ -122,7 +125,7 @@ private fun <S> AnimatedContentTransitionScope<S?>.pageTransition(): ContentTran
 
 /**
  * Root of the in-app UI: the current tab's content between a top and a bottom scrim, and a
- * floating expressive navigation bar switching between Home, Search and Options.
+ * floating expressive navigation bar switching between Home, Search, Git and Options.
  *
  * Tapping an app opens its detail page on top of the tab, which stays composed underneath so its
  * scroll position survives; the nav bar gives way to a back bar until the page is closed. A
@@ -211,6 +214,7 @@ fun MainScreen() {
                     onAppClick = onAppClick,
                     onCategoryClick = onCategoryClick,
                 )
+                HomeTab.Git -> GitScreen(contentPadding = contentPadding)
                 HomeTab.Options -> OptionsScreen(
                     contentPadding = contentPadding,
                     onReposClick = {

@@ -3,6 +3,14 @@
     <string name="app_name">EDroid</string>
     <string name="nav_home">Home</string>
     <string name="nav_search">Search</string>
+    <string name="nav_git">Git</string>
+    <string name="git_title">Git</string>
+    <string name="git_add_repo">Add a repo</string>
+    <string name="git_add">Add</string>
+    <string name="git_link_label">Github link</string>
+    <string name="git_link_hint">https://github.com/owner/repo</string>
+    <string name="git_error_invalid">Enter a github.com link or owner/repo</string>
+    <string name="git_error_duplicate">This repository is already in the list</string>
     <string name="nav_options">Options</string>
     <string name="home_featured_title">A random app you may like</string>
     <string name="featured_details">Details</string>
