@@ -7,6 +7,7 @@ import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
 import app.edroid.EDroidApp
+import app.edroid.data.SettingsStore
 import app.edroid.data.fdroid.RepoHub
 import app.edroid.data.fdroid.SyncState
 import app.edroid.data.fdroid.model.App
@@ -31,9 +32,15 @@ data class UpdatesUiState(
     val sync: SyncState = SyncState.Idle,
     /** Out-of-date apps, alphabetically; null until both the index and the installed list are read. */
     val updates: List<AppUpdate>? = null,
+    /** Out-of-date apps the user swiped away; shown collapsed under the list so they can be unhidden. */
+    val hidden: List<AppUpdate> = emptyList(),
 )
 
-class UpdatesViewModel(private val repository: RepoHub, context: Context) : ViewModel() {
+class UpdatesViewModel(
+    private val repository: RepoHub,
+    private val settings: SettingsStore,
+    context: Context,
+) : ViewModel() {
 
     private var refreshJob: Job? = null
 
@@ -51,8 +58,10 @@ class UpdatesViewModel(private val repository: RepoHub, context: Context) : View
     }.flowOn(Dispatchers.Default)
 
     val uiState: StateFlow<UpdatesUiState> =
-        combine(updates, repository.sync) { updates, sync -> UpdatesUiState(sync, updates) }
-            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), UpdatesUiState())
+        combine(updates, settings.hiddenUpdates, repository.sync) { updates, hiddenNames, sync ->
+            val (hidden, visible) = updates.orEmpty().partition { it.app.packageName in hiddenNames }
+            UpdatesUiState(sync, updates?.let { visible }, hidden)
+        }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), UpdatesUiState())
 
     /** Pull-to-refresh: re-syncs every repo so newly published versions show up. */
     fun refresh() {
@@ -60,11 +69,13 @@ class UpdatesViewModel(private val repository: RepoHub, context: Context) : View
         refreshJob = viewModelScope.launch { repository.refresh() }
     }
 
+    fun setHidden(packageName: String, hidden: Boolean) = settings.setUpdateHidden(packageName, hidden)
+
     companion object {
         val Factory: ViewModelProvider.Factory = viewModelFactory {
             initializer {
                 val app = this[ViewModelProvider.AndroidViewModelFactory.APPLICATION_KEY] as EDroidApp
-                UpdatesViewModel(app.container.repoHub, app)
+                UpdatesViewModel(app.container.repoHub, app.container.settings, app)
             }
         }
     }

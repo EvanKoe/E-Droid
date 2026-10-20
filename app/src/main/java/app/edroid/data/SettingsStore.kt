@@ -19,8 +19,20 @@ class SettingsStore(context: Context) {
         prefs.edit { putBoolean(KEY_HAPTICS, enabled) }
     }
 
+    // Copied: SharedPreferences hands back its own mutable set, which must not be mutated.
+    private val _hiddenUpdates = MutableStateFlow(prefs.getStringSet(KEY_HIDDEN_UPDATES, null).orEmpty().toSet())
+    /** Package names the Updates tab keeps out of the available list until unhidden. */
+    val hiddenUpdates: StateFlow<Set<String>> = _hiddenUpdates.asStateFlow()
+
+    fun setUpdateHidden(packageName: String, hidden: Boolean) {
+        val set = if (hidden) _hiddenUpdates.value + packageName else _hiddenUpdates.value - packageName
+        _hiddenUpdates.value = set
+        prefs.edit { putStringSet(KEY_HIDDEN_UPDATES, set) }
+    }
+
     companion object {
         private const val PREFS_NAME = "settings"
         private const val KEY_HAPTICS = "haptics_enabled"
+        private const val KEY_HIDDEN_UPDATES = "hidden_updates"
     }
 }

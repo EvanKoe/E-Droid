@@ -35,6 +35,12 @@
     <string name="home_install_permission_hide">Hide</string>
     <string name="home_install_permission_grant">Grant it</string>
     <string name="updates_none">All your apps are up to date</string>
+    <string name="updates_hide">Hide</string>
+    <string name="updates_unhide">Unhide</string>
+    <plurals name="updates_hidden_count">
+        <item quantity="one">%1$d hidden update</item>
+        <item quantity="other">%1$d hidden updates</item>
+    </plurals>
     <plurals name="updates_count">
         <item quantity="one">%1$d app can be updated</item>
         <item quantity="other">%1$d apps can be updated</item>
