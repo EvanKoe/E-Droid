@@ -17,6 +17,11 @@ fun Context.installedVersionCodeNow(packageName: String): Long? = runCatching {
     PackageInfoCompat.getLongVersionCode(packageManager.getPackageInfo(packageName, 0))
 }.getOrNull()
 
+/** Installed versionName of [packageName] right now, or null when it isn't installed or has none. */
+fun Context.installedVersionNameNow(packageName: String): String? = runCatching {
+    packageManager.getPackageInfo(packageName, 0).versionName
+}.getOrNull()
+
 /** [installedVersionCodeNow] as a flow that follows installs and uninstalls. */
 fun Context.installedVersionCode(packageName: String): Flow<Long?> = callbackFlow {
     val receiver = object : BroadcastReceiver() {

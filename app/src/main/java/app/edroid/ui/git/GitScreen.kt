@@ -3,12 +3,15 @@ package app.edroid.ui.git
 import android.content.Context
 import android.text.format.Formatter
 import android.widget.Toast
+import androidx.annotation.StringRes
+import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -22,10 +25,16 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Add
+import androidx.compose.material.icons.rounded.Delete
+import androidx.compose.material.icons.rounded.Download
+import androidx.compose.material.icons.rounded.PlayArrow
+import androidx.compose.material.icons.rounded.Refresh
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
@@ -49,6 +58,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
@@ -60,11 +70,14 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import app.edroid.R
 import app.edroid.data.github.GitHubAsset
+import app.edroid.ui.components.ActionGap
+import app.edroid.ui.components.AppInstallActions
 import app.edroid.ui.components.GitIcon
 import app.edroid.ui.components.InstallActions
 import app.edroid.ui.components.PageTitle
 import app.edroid.ui.components.appInstallActions
 import app.edroid.ui.options.UiText
+import app.edroid.ui.search.SearchField
 import app.edroid.ui.theme.GroupedItemSpacing
 import app.edroid.ui.theme.Layering
 import app.edroid.ui.theme.groupedShapeAt
@@ -89,7 +102,13 @@ fun GitScreen(
     val context = LocalContext.current
     val rows by viewModel.rows.collectAsStateWithLifecycle()
     val refreshing by viewModel.refreshing.collectAsStateWithLifecycle()
+    val hasUpdates by viewModel.hasUpdates.collectAsStateWithLifecycle()
     var adding by rememberSaveable { mutableStateOf(false) }
+    var query by rememberSaveable { mutableStateOf("") }
+    val shown = remember(rows, query) {
+        val q = query.trim()
+        rows.filter { it.tracked.repo.name.contains(q, ignoreCase = true) || it.tracked.repo.owner.contains(q, ignoreCase = true) }
+    }
 
     LaunchedEffect(Unit) {
         viewModel.messages.collect { Toast.makeText(context, context.resolve(it), Toast.LENGTH_LONG).show() }
@@ -126,21 +145,40 @@ fun GitScreen(
             verticalArrangement = Arrangement.spacedBy(GroupedItemSpacing),
         ) {
             PageTitle(stringResource(R.string.git_title))
-            rows.forEachIndexed { index, row ->
-                GitRepoCard(row, groupedShapeAt(index, rows.size), viewModel)
+            SearchField(
+                query = query,
+                onQueryChange = { query = it },
+                onSearch = {},
+                onClear = { query = "" },
+                hint = R.string.git_search_hint,
+            )
+            shown.forEachIndexed { index, row ->
+                GitRepoCard(row, groupedShapeAt(index, shown.size), viewModel)
             }
             Spacer(Modifier.height(AddButtonClearance))
         }
 
-        Button(
-            onClick = { adding = true },
+        Surface(
+            shape = CircleShape,
+            color = Layering.item,
             modifier = Modifier
                 .align(Alignment.BottomCenter)
                 .padding(bottom = contentPadding.calculateBottomPadding()),
         ) {
-            Icon(Icons.Rounded.Add, contentDescription = null, modifier = Modifier.size(18.dp))
-            Spacer(Modifier.width(8.dp))
-            Text(stringResource(R.string.git_add_repo))
+            Row(
+                Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Button(
+                    onClick = { adding = true },
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = MaterialTheme.colorScheme.secondary,
+                        contentColor = MaterialTheme.colorScheme.onSecondary,
+                    ),
+                ) { ActionContent(Icons.Rounded.Add, R.string.git_add) }
+                TextButton(onClick = viewModel::updateAll, enabled = hasUpdates) { ActionContent(Icons.Rounded.Refresh, R.string.git_update_all) }
+            }
         }
     }
 
@@ -161,12 +199,25 @@ fun GitScreen(
 private fun GitRepoCard(row: GitRow, shape: Shape, viewModel: GitViewModel) {
     val tracked = row.tracked
     val latest = tracked.latest
+    var expanded by rememberSaveable(tracked.key) { mutableStateOf(false) }
+    val actions = latest?.let {
+        appInstallActions(
+            packageName = it.packageName,
+            appName = it.appName,
+            version = remember(it) { it.toAppVersion() },
+            latestVersionCode = it.versionCode,
+            allowUninstall = false,
+            reportFailures = true,
+            installSource = { viewModel.cachedApk(tracked) },
+        )
+    }
     Card(
+        onClick = { expanded = !expanded },
         modifier = Modifier.fillMaxWidth(),
         shape = shape,
         colors = CardDefaults.cardColors(containerColor = Layering.item),
     ) {
-        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        Column(Modifier.padding(16.dp).animateContentSize(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Surface(shape = CircleShape, color = MaterialTheme.colorScheme.primaryContainer, modifier = Modifier.size(40.dp)) {
                     Icon(
@@ -178,39 +229,42 @@ private fun GitRepoCard(row: GitRow, shape: Shape, viewModel: GitViewModel) {
                 }
                 Spacer(Modifier.width(16.dp))
                 Column {
-                    Text(tracked.repo.name, style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                    Text(
-                        tracked.repo.owner,
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                    )
-                    latest?.let {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
                         Text(
-                            stringResource(R.string.git_latest, it.tag),
-                            style = MaterialTheme.typography.bodySmall,
+                            tracked.repo.name,
+                            style = MaterialTheme.typography.titleMedium,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.weight(1f, fill = false),
+                        )
+                        Surface(
+                            shape = CircleShape,
+                            color = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.padding(horizontal = 8.dp).size(6.dp),
+                        ) {}
+                        Text(
+                            tracked.repo.owner,
+                            style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.weight(1f, fill = false),
                         )
                     }
+                    latest?.let { VersionLine(stringResource(R.string.git_latest, it.tag)) }
+                    actions?.state?.installedVersionName?.let { VersionLine(stringResource(R.string.git_installed, it)) }
                 }
             }
             when {
                 row.state != null -> RowStatus(row.state, onRetry = { viewModel.retry(tracked.repo) })
-                latest != null -> InstallActions(
-                    appInstallActions(
-                        packageName = latest.packageName,
-                        appName = latest.appName,
-                        version = remember(latest) { latest.toAppVersion() },
-                        latestVersionCode = latest.versionCode,
-                        allowUninstall = false,
-                        reportFailures = true,
-                        installSource = { viewModel.cachedApk(tracked) },
-                    ),
-                    Modifier.fillMaxWidth(),
-                )
+                actions != null -> {
+                    // Install, progress and Cancel keep the animated bar; an installed app folds its buttons away until tapped.
+                    if (!actions.state.installed || actions.state.busy) {
+                        InstallActions(actions, Modifier.fillMaxWidth())
+                    } else if (expanded) {
+                        InstalledActions(actions)
+                    }
+                }
                 tracked.needsChoice -> StatusLine(
                     stringResource(R.string.git_choose_needed),
                     actionLabel = R.string.git_choose_apk,
@@ -219,6 +273,55 @@ private fun GitRepoCard(row: GitRow, shape: Shape, viewModel: GitViewModel) {
             }
         }
     }
+}
+
+@Composable
+private fun VersionLine(text: String) {
+    Text(
+        text,
+        style = MaterialTheme.typography.bodySmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        maxLines = 1,
+        overflow = TextOverflow.Ellipsis,
+    )
+}
+
+/** Delete, Open and Update side by side; Update turns into a disabled "Up to date" when nothing newer is out. */
+@Composable
+private fun InstalledActions(actions: AppInstallActions) {
+    val state = actions.state
+    val canUpdate = state.updateAvailable && state.canInstall
+    val padding = PaddingValues(horizontal = 8.dp)
+    Row(Modifier.fillMaxWidth().height(48.dp), horizontalArrangement = Arrangement.spacedBy(ActionGap)) {
+        FilledTonalButton(
+            onClick = actions.onUninstall,
+            colors = ButtonDefaults.filledTonalButtonColors(
+                containerColor = MaterialTheme.colorScheme.errorContainer,
+                contentColor = MaterialTheme.colorScheme.onErrorContainer,
+            ),
+            contentPadding = padding,
+            modifier = Modifier.weight(1f).fillMaxHeight(),
+        ) { ActionContent(Icons.Rounded.Delete, R.string.action_delete) }
+        FilledTonalButton(
+            onClick = actions.onOpen,
+            enabled = state.canOpen,
+            contentPadding = padding,
+            modifier = Modifier.weight(1f).fillMaxHeight(),
+        ) { ActionContent(Icons.Rounded.PlayArrow, R.string.action_open) }
+        Button(
+            onClick = actions.onInstall,
+            enabled = canUpdate,
+            contentPadding = padding,
+            modifier = Modifier.weight(1f).fillMaxHeight(),
+        ) { ActionContent(Icons.Rounded.Download, if (canUpdate) R.string.action_update else R.string.git_up_to_date) }
+    }
+}
+
+@Composable
+private fun ActionContent(icon: ImageVector, @StringRes label: Int) {
+    Icon(icon, contentDescription = null, modifier = Modifier.size(18.dp))
+    Spacer(Modifier.width(6.dp))
+    Text(stringResource(label), style = MaterialTheme.typography.labelLarge, maxLines = 1, softWrap = false)
 }
 
 /** What a tracking run is doing; Choosing has no inline status because its dialog takes over. */

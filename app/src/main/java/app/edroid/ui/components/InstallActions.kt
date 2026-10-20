@@ -56,6 +56,7 @@ import app.edroid.data.install.InstallState
 import app.edroid.data.install.canOpenApp
 import app.edroid.data.install.installedVersionCode
 import app.edroid.data.install.installedVersionCodeNow
+import app.edroid.data.install.installedVersionNameNow
 import app.edroid.data.install.openApp
 import app.edroid.data.install.requestUninstall
 import java.io.File
@@ -109,7 +110,8 @@ internal fun appInstallActions(
     val canOpen = remember(context, packageName, installedVersion) {
         installedVersion != null && context.canOpenApp(packageName)
     }
-    val targetVersionCode = version?.versionCode ?: latestVersionCode
+    val installedVersionName = remember(context, packageName, installedVersion) { context.installedVersionNameNow(packageName) }
+    val targetVersionCode =version?.versionCode ?: latestVersionCode
     // Lets the "ready to install" notification show when a download finishes in the background.
     val notificationPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) {}
     return AppInstallActions(
@@ -120,6 +122,7 @@ internal fun appInstallActions(
             canInstall = version != null,
             canOpen = canOpen,
             allowUninstall = allowUninstall,
+            installedVersionName = installedVersionName,
         ),
         onInstall = {
             if (Build.VERSION.SDK_INT >= 33 &&
@@ -149,6 +152,7 @@ internal data class ActionsState(
     val canInstall: Boolean,
     val canOpen: Boolean,
     val allowUninstall: Boolean = true,
+    val installedVersionName: String? = null,
 ) {
     /** Downloading or handed to the system installer. */
     val busy get() = install is InstallState.Downloading || install is InstallState.Installing

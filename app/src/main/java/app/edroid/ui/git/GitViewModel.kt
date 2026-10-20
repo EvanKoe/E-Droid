@@ -1,5 +1,6 @@
 package app.edroid.ui.git
 
+import android.content.Context
 import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
@@ -14,6 +15,8 @@ import app.edroid.data.github.GitHubRepo
 import app.edroid.data.github.GitHubRepoStore
 import app.edroid.data.github.TrackResult
 import app.edroid.data.github.TrackedRepo
+import app.edroid.data.install.ApkInstaller
+import app.edroid.data.install.installedVersionCodeNow
 import app.edroid.ui.options.UiText
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
@@ -43,6 +46,8 @@ data class GitRow(val tracked: TrackedRepo, val state: TrackState?)
 class GitViewModel(
     private val store: GitHubRepoStore,
     private val checker: GitHubReleaseChecker,
+    private val installer: ApkInstaller,
+    private val context: Context,
 ) : ViewModel() {
 
     private val states = MutableStateFlow<Map<String, TrackState>>(emptyMap())
@@ -55,6 +60,10 @@ class GitViewModel(
         val storedKeys = stored.mapTo(HashSet()) { it.key }
         (stored + pend.filter { it.key !in storedKeys }).map { GitRow(it, st[it.key]) }
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
+    // Install states are folded in so finishing an install re-checks which repos are still behind.
+    val hasUpdates: StateFlow<Boolean> = combine(rows, installer.states) { list, _ -> list.any { isUpdatable(it.tracked) } }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), false)
 
     val refreshing: StateFlow<Boolean> = _refreshing
     val messages: Flow<UiText> = _messages.receiveAsFlow()
@@ -100,6 +109,19 @@ class GitViewModel(
                 _refreshing.value = false
             }
         }
+    }
+
+    /** Installs the latest release of every installed repo that has a newer one than the device runs. */
+    fun updateAll() {
+        rows.value.map { it.tracked }.filter(::isUpdatable).forEach { tracked ->
+            tracked.latest?.let { installer.install(it.packageName, it.appName, it.toAppVersion(), cachedApk(tracked)) }
+        }
+    }
+
+    private fun isUpdatable(tracked: TrackedRepo): Boolean {
+        val latest = tracked.latest ?: return false
+        val installed = context.installedVersionCodeNow(latest.packageName) ?: return false
+        return latest.versionCode > installed
     }
 
     /** The already-downloaded APK of [tracked], so installing it does not download it twice. */
@@ -162,7 +184,7 @@ class GitViewModel(
         val Factory: ViewModelProvider.Factory = viewModelFactory {
             initializer {
                 val app = this[ViewModelProvider.AndroidViewModelFactory.APPLICATION_KEY] as EDroidApp
-                GitViewModel(app.container.gitHubRepos, app.container.gitHubChecker)
+                GitViewModel(app.container.gitHubRepos, app.container.gitHubChecker, app.container.apkInstaller, app)
             }
         }
     }

@@ -5,6 +5,7 @@
     <string name="nav_search">Search</string>
     <string name="nav_git">Git</string>
     <string name="git_title">Git</string>
+    <string name="git_search_hint">Search repos or creators</string>
     <string name="git_add_repo">Add a repo</string>
     <string name="git_add">Add</string>
     <string name="git_link_label">Github link</string>
@@ -17,6 +18,10 @@
     <string name="git_checking">Checking releases…</string>
     <string name="git_downloading_percent">Downloading %1$d%%</string>
     <string name="git_latest">Latest: %1$s</string>
+    <string name="git_installed">Installed: %1$s</string>
+    <string name="git_update_all">Update all</string>
+    <string name="git_up_to_date">Up to date</string>
+    <string name="action_delete">Delete</string>
     <string name="git_choose_apk">Which APK?</string>
     <string name="git_choose_apk_intro">This release has several APK files. Pick the one that fits your device.</string>
     <string name="git_choose_needed">Pick an APK file to continue</string>
