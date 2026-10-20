@@ -59,6 +59,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
@@ -81,6 +82,7 @@ import app.edroid.ui.search.SearchField
 import app.edroid.ui.theme.GroupedItemSpacing
 import app.edroid.ui.theme.Layering
 import app.edroid.ui.theme.groupedShapeAt
+import coil3.compose.AsyncImage
 
 /** Room the list keeps at its end so the last card clears the Add button floating over it. */
 private val AddButtonClearance = 72.dp
@@ -220,12 +222,21 @@ private fun GitRepoCard(row: GitRow, shape: Shape, viewModel: GitViewModel) {
         Column(Modifier.padding(16.dp).animateContentSize(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Surface(shape = CircleShape, color = MaterialTheme.colorScheme.primaryContainer, modifier = Modifier.size(40.dp)) {
-                    Icon(
-                        GitIcon,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.onPrimaryContainer,
-                        modifier = Modifier.padding(8.dp),
-                    )
+                    // The glyph sits under the avatar: it shows while loading and whenever the avatar can't be fetched.
+                    Box {
+                        Icon(
+                            GitIcon,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                            modifier = Modifier.padding(8.dp),
+                        )
+                        AsyncImage(
+                            model = "https://github.com/${tracked.repo.owner}.png?size=120",
+                            contentDescription = null,
+                            contentScale = ContentScale.Crop,
+                            modifier = Modifier.fillMaxSize(),
+                        )
+                    }
                 }
                 Spacer(Modifier.width(16.dp))
                 Column {
