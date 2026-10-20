@@ -152,6 +152,8 @@
     <string name="notification_channel_installs">App installs</string>
     <string name="notification_install_ready_title">%1$s is ready to install</string>
     <string name="notification_install_ready_text">Tap to finish installing</string>
+    <string name="notification_channel_git_updates">GitHub updates</string>
+    <string name="notification_git_updates_title">GitHub updates available</string>
     <string name="notification_channel_downloads">Downloads</string>
     <string name="notification_downloading_title">Downloading %1$s</string>
     <string name="details_version_updated">Version %1$s · updated %2$s</string>

@@ -16,7 +16,6 @@ import app.edroid.data.github.GitHubRepoStore
 import app.edroid.data.github.TrackResult
 import app.edroid.data.github.TrackedRepo
 import app.edroid.data.install.ApkInstaller
-import app.edroid.data.install.installedVersionCodeNow
 import app.edroid.ui.options.UiText
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
@@ -118,11 +117,7 @@ class GitViewModel(
         }
     }
 
-    private fun isUpdatable(tracked: TrackedRepo): Boolean {
-        val latest = tracked.latest ?: return false
-        val installed = context.installedVersionCodeNow(latest.packageName) ?: return false
-        return latest.versionCode > installed
-    }
+    private fun isUpdatable(tracked: TrackedRepo) = checker.isUpdatable(tracked)
 
     /** The already-downloaded APK of [tracked], so installing it does not download it twice. */
     fun cachedApk(tracked: TrackedRepo): File? =

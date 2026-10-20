@@ -5,6 +5,7 @@ import android.util.Log
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import app.edroid.data.install.installedVersionCodeNow
 import java.io.File
 import java.io.IOException
 
@@ -61,6 +62,15 @@ class GitHubReleaseChecker(
             ),
         )
     }
+
+    /** Whether the latest release of [tracked] is newer than the installed app; false when not installed. */
+    fun isUpdatable(tracked: TrackedRepo): Boolean {
+        val latest = tracked.latest ?: return false
+        val installed = context.installedVersionCodeNow(latest.packageName) ?: return false
+        return latest.versionCode > installed
+    }
+
+    fun updatableCount() = store.repos.value.count(::isUpdatable)
 
     /** Re-tracks every followed repo whose latest release tag changed; one failure never stops the rest. */
     suspend fun checkAll() {

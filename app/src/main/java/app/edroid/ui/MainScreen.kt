@@ -33,6 +33,7 @@ import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material.icons.rounded.Settings
 import androidx.compose.material.icons.rounded.Update
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -142,16 +143,25 @@ private fun <S> AnimatedContentTransitionScope<S?>.pageTransition(): ContentTran
  * once here so every tab clears both scrims without having to know about them.
  */
 @Composable
-fun MainScreen() {
+fun MainScreen(gitRequest: Int = 0) {
     var selectedIndex by rememberSaveable { mutableIntStateOf(0) }
-    // Bumped each time the already-selected Search tab is tapped again; the Search page focuses
-    // its field whenever this changes. Reset on every tab change so returning to Search later
-    // doesn't replay a stale request.
-    var searchFocusRequest by remember { mutableIntStateOf(0) }
     var openApp by rememberSaveable(stateSaver = OpenAppSaver) { mutableStateOf<OpenApp?>(null) }
     var openCategory by rememberSaveable(stateSaver = OpenCategorySaver) { mutableStateOf<OpenCategory?>(null) }
     var permissionsOpen by rememberSaveable { mutableStateOf(false) }
     var reposOpen by rememberSaveable { mutableStateOf(false) }
+    // A notification tap: drop any pushed page and land on the Git tab.
+    LaunchedEffect(gitRequest) {
+        if (gitRequest == 0) return@LaunchedEffect
+        openApp = null
+        openCategory = null
+        permissionsOpen = false
+        reposOpen = false
+        selectedIndex = HomeTab.Git.ordinal
+    }
+    // Bumped each time the already-selected Search tab is tapped again; the Search page focuses
+    // its field whenever this changes. Reset on every tab change so returning to Search later
+    // doesn't replay a stale request.
+    var searchFocusRequest by remember { mutableIntStateOf(0) }
     val tabs = HomeTab.entries
     val current = tabs[selectedIndex.coerceIn(0, tabs.lastIndex)]
     val haptics = LocalHapticFeedback.current
