@@ -1,6 +1,7 @@
 package app.edroid.ui.search
 
 import androidx.activity.compose.BackHandler
+import androidx.annotation.StringRes
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -204,19 +205,20 @@ fun SearchScreen(
 private val FieldScrimHeight: Dp = 40.dp
 
 @Composable
-private fun SearchField(
+internal fun SearchField(
     query: String,
     onQueryChange: (String) -> Unit,
     onSearch: () -> Unit,
     onClear: () -> Unit,
     modifier: Modifier = Modifier,
+    @StringRes hint: Int = R.string.search_hint,
 ) {
     TextField(
         value = query,
         onValueChange = onQueryChange,
         modifier = modifier.fillMaxWidth(),
         singleLine = true,
-        placeholder = { Text(stringResource(R.string.search_hint)) },
+        placeholder = { Text(stringResource(hint)) },
         leadingIcon = { Icon(Icons.Rounded.Search, contentDescription = null) },
         trailingIcon = {
             if (query.isNotEmpty()) {

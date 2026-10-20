@@ -2,6 +2,7 @@ package app.edroid.ui.theme
 
 import android.os.Build
 import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialExpressiveTheme
 import androidx.compose.material3.MotionScheme
 import androidx.compose.material3.Shapes
@@ -10,6 +11,7 @@ import androidx.compose.material3.dynamicDarkColorScheme
 import androidx.compose.material3.dynamicLightColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.platform.LocalContext
 
 private val LightColors = lightColorScheme(
@@ -113,6 +115,9 @@ fun EDroidTheme(
         motionScheme = MotionScheme.expressive(),
         shapes = Shapes(),
         typography = EDroidTypography,
-        content = content,
-    )
+    ) {
+        // Pages are drawn on plain backgrounds rather than a Surface, so nothing else sets a content
+        // color: text straight on a page would fall back to black, unreadable in dark theme.
+        CompositionLocalProvider(LocalContentColor provides colorScheme.onSurface, content = content)
+    }
 }

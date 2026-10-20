@@ -56,8 +56,10 @@ import app.edroid.data.install.InstallState
 import app.edroid.data.install.canOpenApp
 import app.edroid.data.install.installedVersionCode
 import app.edroid.data.install.installedVersionCodeNow
+import app.edroid.data.install.installedVersionNameNow
 import app.edroid.data.install.openApp
 import app.edroid.data.install.requestUninstall
+import java.io.File
 
 /** Everything [InstallActions] needs for one package: what to show and what each button does. */
 internal class AppInstallActions(
@@ -78,6 +80,7 @@ internal class AppInstallActions(
  * @param allowUninstall whether an installed app offers Uninstall beside Open or Update.
  * @param reportFailures toasts install failures. Only one caller per package should, or a page
  *   drawn over another showing the same app toasts twice.
+ * @param installSource an already downloaded APK to install instead of fetching [version], if any.
  */
 @Composable
 internal fun appInstallActions(
@@ -87,6 +90,7 @@ internal fun appInstallActions(
     latestVersionCode: Long?,
     allowUninstall: Boolean = true,
     reportFailures: Boolean = true,
+    installSource: () -> File? = { null },
 ): AppInstallActions {
     val context = LocalContext.current
     val installer = remember(context) { (context.applicationContext as EDroidApp).container.apkInstaller }
@@ -106,7 +110,8 @@ internal fun appInstallActions(
     val canOpen = remember(context, packageName, installedVersion) {
         installedVersion != null && context.canOpenApp(packageName)
     }
-    val targetVersionCode = version?.versionCode ?: latestVersionCode
+    val installedVersionName = remember(context, packageName, installedVersion) { context.installedVersionNameNow(packageName) }
+    val targetVersionCode =version?.versionCode ?: latestVersionCode
     // Lets the "ready to install" notification show when a download finishes in the background.
     val notificationPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) {}
     return AppInstallActions(
@@ -117,6 +122,7 @@ internal fun appInstallActions(
             canInstall = version != null,
             canOpen = canOpen,
             allowUninstall = allowUninstall,
+            installedVersionName = installedVersionName,
         ),
         onInstall = {
             if (Build.VERSION.SDK_INT >= 33 &&
@@ -124,7 +130,7 @@ internal fun appInstallActions(
             ) {
                 notificationPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
             }
-            version?.let { installer.install(packageName, appName, it) }
+            version?.let { installer.install(packageName, appName, it, installSource()) }
         },
         onOpen = { context.openApp(packageName) },
         onUninstall = { context.requestUninstall(packageName) },
@@ -146,6 +152,7 @@ internal data class ActionsState(
     val canInstall: Boolean,
     val canOpen: Boolean,
     val allowUninstall: Boolean = true,
+    val installedVersionName: String? = null,
 ) {
     /** Downloading or handed to the system installer. */
     val busy get() = install is InstallState.Downloading || install is InstallState.Installing

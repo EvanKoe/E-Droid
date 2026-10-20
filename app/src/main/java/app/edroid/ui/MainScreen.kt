@@ -31,7 +31,9 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Home
 import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material.icons.rounded.Settings
+import androidx.compose.material.icons.rounded.Update
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -59,7 +61,9 @@ import app.edroid.ui.details.AppDetailScreen
 import app.edroid.ui.details.DetailBackBar
 import app.edroid.ui.components.EmphasizedEasing
 import app.edroid.ui.components.ExpressiveNavBar
+import app.edroid.ui.components.GitIcon
 import app.edroid.ui.components.NavBarItem
+import app.edroid.ui.git.GitScreen
 import app.edroid.ui.options.OptionsScreen
 import app.edroid.ui.options.PermissionsDetailsScreen
 import app.edroid.ui.options.ReposScreen
@@ -67,14 +71,17 @@ import app.edroid.ui.search.CategoryScreen
 import app.edroid.ui.search.SearchScreen
 import app.edroid.ui.theme.Layering
 import app.edroid.ui.theme.PageHorizontalPadding
+import app.edroid.ui.updates.UpdatesScreen
 
-/** The three top-level tabs, in the order the nav bar shows them. */
+/** The top-level tabs, in the order the nav bar shows them. */
 private enum class HomeTab(
     @param:StringRes val labelRes: Int,
     val icon: ImageVector,
 ) {
     Home(R.string.nav_home, Icons.Rounded.Home),
     Search(R.string.nav_search, Icons.Rounded.Search),
+    Git(R.string.nav_git, GitIcon),
+    Updates(R.string.nav_updates, Icons.Rounded.Update),
     Options(R.string.nav_options, Icons.Rounded.Settings),
 }
 
@@ -122,7 +129,7 @@ private fun <S> AnimatedContentTransitionScope<S?>.pageTransition(): ContentTran
 
 /**
  * Root of the in-app UI: the current tab's content between a top and a bottom scrim, and a
- * floating expressive navigation bar switching between Home, Search and Options.
+ * floating expressive navigation bar switching between Home, Search, Updates, Git and Options.
  *
  * Tapping an app opens its detail page on top of the tab, which stays composed underneath so its
  * scroll position survives; the nav bar gives way to a back bar until the page is closed. A
@@ -136,16 +143,25 @@ private fun <S> AnimatedContentTransitionScope<S?>.pageTransition(): ContentTran
  * once here so every tab clears both scrims without having to know about them.
  */
 @Composable
-fun MainScreen() {
+fun MainScreen(gitRequest: Int = 0) {
     var selectedIndex by rememberSaveable { mutableIntStateOf(0) }
-    // Bumped each time the already-selected Search tab is tapped again; the Search page focuses
-    // its field whenever this changes. Reset on every tab change so returning to Search later
-    // doesn't replay a stale request.
-    var searchFocusRequest by remember { mutableIntStateOf(0) }
     var openApp by rememberSaveable(stateSaver = OpenAppSaver) { mutableStateOf<OpenApp?>(null) }
     var openCategory by rememberSaveable(stateSaver = OpenCategorySaver) { mutableStateOf<OpenCategory?>(null) }
     var permissionsOpen by rememberSaveable { mutableStateOf(false) }
     var reposOpen by rememberSaveable { mutableStateOf(false) }
+    // A notification tap: drop any pushed page and land on the Git tab.
+    LaunchedEffect(gitRequest) {
+        if (gitRequest == 0) return@LaunchedEffect
+        openApp = null
+        openCategory = null
+        permissionsOpen = false
+        reposOpen = false
+        selectedIndex = HomeTab.Git.ordinal
+    }
+    // Bumped each time the already-selected Search tab is tapped again; the Search page focuses
+    // its field whenever this changes. Reset on every tab change so returning to Search later
+    // doesn't replay a stale request.
+    var searchFocusRequest by remember { mutableIntStateOf(0) }
     val tabs = HomeTab.entries
     val current = tabs[selectedIndex.coerceIn(0, tabs.lastIndex)]
     val haptics = LocalHapticFeedback.current
@@ -204,12 +220,26 @@ fun MainScreen() {
             label = "homeTab",
         ) { tab ->
             when (tab) {
-                HomeTab.Home -> AppListScreen(contentPadding = contentPadding, onAppClick = onAppClick)
+                HomeTab.Home -> AppListScreen(
+                    contentPadding = contentPadding,
+                    onAppClick = onAppClick,
+                    onUpdatesClick = {
+                        haptics.performHapticFeedback(HapticFeedbackType.VirtualKey)
+                        searchFocusRequest = 0
+                        selectedIndex = HomeTab.Updates.ordinal
+                    },
+                )
                 HomeTab.Search -> SearchScreen(
                     contentPadding = contentPadding,
                     focusRequest = searchFocusRequest,
                     onAppClick = onAppClick,
                     onCategoryClick = onCategoryClick,
+                )
+                HomeTab.Git -> GitScreen(contentPadding = contentPadding)
+                HomeTab.Updates -> UpdatesScreen(
+                    contentPadding = contentPadding,
+                    detailPackageName = openApp?.packageName,
+                    onAppClick = onAppClick,
                 )
                 HomeTab.Options -> OptionsScreen(
                     contentPadding = contentPadding,
