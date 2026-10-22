@@ -20,12 +20,10 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Check
@@ -81,22 +79,43 @@ import app.edroid.ui.components.PageTitle
 import app.edroid.ui.components.appInstallActions
 import app.edroid.ui.components.SectionTitle
 import app.edroid.ui.components.relativeTime
-import app.edroid.ui.theme.GroupedOuterRadius
 import app.edroid.ui.theme.Layering
 import app.edroid.ui.theme.PageHorizontalPadding
+import app.edroid.ui.theme.groupedShape
 import coil3.compose.AsyncImage
 import kotlinx.coroutines.CancellationException
 
 /** F-Droid feature graphics are 1024×500. */
 private const val BANNER_ASPECT = 1024f / 500f
+
+/** Side of the square app icon tile in the header. */
 private val IconTileSize = 96.dp
+
 /** How far the icon tile reaches up into the banner. */
 private val IconOverlap = 32.dp
 /** Width of the large carousel item; the medium and small ones are derived from it. */
 private val MediaPreferredWidth = 200.dp
+
+/** Height of the screenshot carousel. */
 private val MediaHeight = 300.dp
+
+/** Gap between carousel items. */
 private val MediaItemSpacing = 8.dp
+
+/** Lines of the description shown before the user expands it. */
 private const val DESCRIPTION_COLLAPSED_LINES = 6
+
+/** Placeholder tiles shown in the carousel while the media loads. */
+private const val MEDIA_PLACEHOLDER_COUNT = 3
+
+/** Rotation, in degrees, of the version picker arrow while its menu is open. */
+private const val PICKER_ARROW_OPEN_DEGREES = 180f
+
+/** Opacity of the scrim behind the full-screen screenshot viewer. */
+private const val VIEWER_SCRIM_ALPHA = 0.92f
+
+/** Separator between facts on one line, such as age and size. */
+private const val FACT_SEPARATOR = "  ·  "
 
 /** The heavy part of the page, read from the on-disk index after the screen opens. */
 private sealed interface DetailsState {
@@ -128,7 +147,6 @@ fun AppDetailScreen(
     val app = remember(snapshot, packageName) { repository.app(packageName) }
     val antiFeatureNames = snapshot?.repo?.antiFeatures.orEmpty()
 
-    // Re-keyed on the index timestamp so a refresh (or the first download) reloads the page.
     val state by produceState<DetailsState>(DetailsState.Loading, packageName, snapshot?.repo?.timestamp) {
         value = try {
             repository.details(packageName)?.let { DetailsState.Loaded(it) } ?: DetailsState.NotFound
@@ -138,6 +156,7 @@ fun AppDetailScreen(
             DetailsState.Failed(e.message ?: e.javaClass.simpleName)
         }
     }
+
     val details = (state as? DetailsState.Loaded)?.details
     val versions = details?.versions.orEmpty()
     var selectedVersionCode by rememberSaveable(packageName) { mutableStateOf<Long?>(null) }
@@ -155,7 +174,6 @@ fun AppDetailScreen(
     val openUri: (String) -> Unit = { runCatching { uriHandler.openUri(it) } }
     val inset = Modifier.padding(horizontal = PageHorizontalPadding)
 
-    // Horizontal padding is applied per child so the media strip can bleed to the screen edges.
     Column(
         modifier = modifier
             .fillMaxSize()
@@ -165,6 +183,8 @@ fun AppDetailScreen(
         verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
         PageTitle(text = app?.name ?: packageName, modifier = inset)
+
+        // Banner, icon and install actions
         Header(
             bannerUrl = details?.bannerUrl,
             iconUrl = app?.iconUrl,
@@ -173,9 +193,13 @@ fun AppDetailScreen(
             InstallActions(installActions, Modifier.weight(1f))
         }
 
+        // Info card
         InfoCard(app = app, state = state, modifier = inset)
+
+        // Media carousel
         MediaStrip(state = state, onScreenshot = { viewerPage = it }, onVideo = openUri)
 
+        // Version picker
         if (versions.isNotEmpty() || app?.latestVersionName != null) {
             VersionPicker(
                 versions = versions,
@@ -185,10 +209,14 @@ fun AppDetailScreen(
                 modifier = inset,
             )
         }
+
+        // Version notes
         selected?.let { VersionNotes(it, antiFeatureNames, inset) }
     }
 
+    // Screenshot viewer
     val page = viewerPage
+
     if (page != null && details != null && page in details.screenshotUrls.indices) {
         ScreenshotViewer(details.screenshotUrls, page, onDismiss = { viewerPage = null })
     }
@@ -207,6 +235,8 @@ private fun Header(
     Layout(
         modifier = modifier,
         content = {
+
+            // Banner
             if (bannerUrl != null && !bannerFailed) {
                 Banner(
                     bannerUrl,
@@ -214,12 +244,14 @@ private fun Header(
                     modifier = Modifier.fillMaxWidth().aspectRatio(BANNER_ASPECT),
                 )
             }
+
+            // Icon and actions row
             Row(
                 modifier = Modifier.fillMaxWidth().padding(start = 12.dp, end = 8.dp),
+                horizontalArrangement = Arrangement.spacedBy(16.dp),
                 verticalAlignment = Alignment.Bottom,
             ) {
                 IconTile(iconUrl)
-                Spacer(Modifier.width(16.dp))
                 actions()
             }
         },
@@ -244,7 +276,7 @@ private fun Banner(url: String, onError: () -> Unit, modifier: Modifier = Modifi
         contentScale = ContentScale.Crop,
         onError = { onError() },
         modifier = modifier
-            .clip(RoundedCornerShape(GroupedOuterRadius))
+            .clip(groupedShape(isFirst = true, isLast = true))
             .background(Layering.item),
     )
 }
@@ -253,7 +285,7 @@ private fun Banner(url: String, onError: () -> Unit, modifier: Modifier = Modifi
 @Composable
 private fun IconTile(url: String?) {
     Surface(
-        shape = RoundedCornerShape(28.dp),
+        shape = MaterialTheme.shapes.extraLarge,
         color = Layering.item,
         border = BorderStroke(5.dp, Layering.page),
         modifier = Modifier.size(IconTileSize),
@@ -271,14 +303,18 @@ private fun IconTile(url: String?) {
 private fun InfoCard(app: App?, state: DetailsState, modifier: Modifier = Modifier) {
     Card(
         modifier = modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(GroupedOuterRadius),
+        shape = groupedShape(isFirst = true, isLast = true),
         colors = CardDefaults.cardColors(containerColor = Layering.item),
     ) {
         Column(
             modifier = Modifier.padding(20.dp).animateContentSize(MaterialTheme.motionScheme.defaultSpatialSpec()),
             verticalArrangement = Arrangement.spacedBy(4.dp),
         ) {
+
+            // Publisher
             app?.authorName?.let { Text(it, style = MaterialTheme.typography.titleMedium) }
+
+            // Version and age
             app?.latestVersionName?.let { version ->
                 Text(
                     stringResource(R.string.details_version_updated, version, relativeTime(app.lastUpdated)),
@@ -286,13 +322,19 @@ private fun InfoCard(app: App?, state: DetailsState, modifier: Modifier = Modifi
                     color = MaterialTheme.colorScheme.primary,
                 )
             }
+
             Spacer(Modifier.height(8.dp))
+
+            // Description or summary
             val description = (state as? DetailsState.Loaded)?.details?.description
+
             if (description != null) {
                 ExpandableDescription(description)
             } else {
                 app?.summary?.let { Text(it, style = MaterialTheme.typography.bodyMedium) }
             }
+
+            // Load status
             when (state) {
                 DetailsState.Loading -> {
                     Spacer(Modifier.height(8.dp))
@@ -306,6 +348,9 @@ private fun InfoCard(app: App?, state: DetailsState, modifier: Modifier = Modifi
     }
 }
 
+/**
+ * Small error-coloured line reporting a load problem.
+ */
 @Composable
 private fun StatusText(text: String) {
     Text(
@@ -316,7 +361,9 @@ private fun StatusText(text: String) {
     )
 }
 
-/** The description clamped to a few lines, with a toggle when it doesn't fit. */
+/**
+ *  The description clamped to a few lines, with a toggle when it doesn't fit.
+ */
 @Composable
 private fun ExpandableDescription(raw: String) {
     val linkColor = MaterialTheme.colorScheme.primary
@@ -324,6 +371,7 @@ private fun ExpandableDescription(raw: String) {
     var expanded by rememberSaveable(raw) { mutableStateOf(false) }
     var overflows by remember(raw) { mutableStateOf(false) }
 
+    // Description text
     Text(
         text,
         style = MaterialTheme.typography.bodyMedium,
@@ -332,7 +380,8 @@ private fun ExpandableDescription(raw: String) {
         onTextLayout = { if (!expanded) overflows = it.hasVisualOverflow },
     )
     if (overflows || expanded) {
-        // Shifted so the label lines up with the text rather than with the button's padding.
+
+        // Show more/less button; shifted so the label lines up with the text rather than with the button's padding.
         TextButton(onClick = { expanded = !expanded }, modifier = Modifier.offset(x = (-12).dp)) {
             Text(stringResource(if (expanded) R.string.details_show_less else R.string.details_show_more))
         }
@@ -349,7 +398,7 @@ private fun descriptionText(raw: String, linkColor: Color): AnnotatedString {
         html,
         linkStyles = TextLinkStyles(style = SpanStyle(color = linkColor, textDecoration = TextDecoration.Underline)),
     )
-    // Paragraph tags leave trailing blank lines behind.
+
     return text.subSequence(0, text.text.trimEnd().length)
 }
 
@@ -363,23 +412,29 @@ private fun MediaStrip(state: DetailsState, onScreenshot: (Int) -> Unit, onVideo
     val loading = state is DetailsState.Loading
     val video = details?.videoUrl
     val shots = details?.screenshotUrls.orEmpty()
-    if (!loading && video == null && shots.isEmpty()) return
 
-    val count = if (loading) 3 else shots.size + (if (video != null) 1 else 0)
+    if (!loading && video == null && shots.isEmpty()) {
+        return
+    }
+
+    val count = if (loading) MEDIA_PLACEHOLDER_COUNT else shots.size + (if (video != null) 1 else 0)
     val offset = if (video != null) 1 else 0
-    val shape = RoundedCornerShape(GroupedOuterRadius)
+    val shape = groupedShape(isFirst = true, isLast = true)
+
     HorizontalMultiBrowseCarousel(
         state = rememberCarouselState { count },
         preferredItemWidth = MediaPreferredWidth,
         itemSpacing = MediaItemSpacing,
         userScrollEnabled = !loading,
-        // Padding outside the carousel rather than contentPadding, so items clip at the margin.
         modifier = Modifier.padding(horizontal = PageHorizontalPadding).fillMaxWidth().height(MediaHeight),
     ) { index ->
-        // maskClip lets the carousel morph each item's visible width as it moves between sizes.
         val tile = Modifier.fillMaxSize().maskClip(shape).background(Layering.item)
+
         when {
+            // Placeholder tile
             loading -> Box(tile)
+
+            // Video tile
             video != null && index == 0 -> Column(
                 modifier = tile.clickable { onVideo(video) },
                 verticalArrangement = Arrangement.Center,
@@ -399,6 +454,8 @@ private fun MediaStrip(state: DetailsState, onScreenshot: (Int) -> Unit, onVideo
                     softWrap = false,
                 )
             }
+
+            // Screenshot tile
             else -> {
                 val shot = index - offset
                 AsyncImage(
@@ -428,6 +485,7 @@ private fun VersionPicker(
     var expanded by remember { mutableStateOf(false) }
     val canExpand = versions.size > 1
 
+    /** Version name text, flagged as the latest when [isLatest]. */
     @Composable
     fun label(version: AppVersion?, isLatest: Boolean): String {
         val name = version?.versionName ?: fallbackVersionName.orEmpty()
@@ -439,6 +497,8 @@ private fun VersionPicker(
         onExpandedChange = { expanded = it && canExpand },
         modifier = modifier,
     ) {
+
+        // Version pill
         Surface(
             shape = CircleShape,
             color = MaterialTheme.colorScheme.surfaceContainerHighest,
@@ -461,11 +521,13 @@ private fun VersionPicker(
                         Icons.Rounded.KeyboardArrowDown,
                         contentDescription = null,
                         tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.rotate(if (expanded) 180f else 0f),
+                        modifier = Modifier.rotate(if (expanded) PICKER_ARROW_OPEN_DEGREES else 0f),
                     )
                 }
             }
         }
+
+        // Version list
         ExposedDropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
             versions.forEachIndexed { index, version ->
                 DropdownMenuItem(
@@ -476,7 +538,7 @@ private fun VersionPicker(
                                 listOfNotNull(
                                     relativeTime(version.added),
                                     version.sizeBytes?.let { Formatter.formatShortFileSize(context, it) },
-                                ).joinToString("  ·  "),
+                                ).joinToString(FACT_SEPARATOR),
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
@@ -497,7 +559,9 @@ private fun VersionPicker(
     }
 }
 
-/** Requirements, anti-features and release notes of the version Install would fetch. */
+/**
+ * Requirements, anti-features and release notes of the version Install would fetch.
+ */
 @Composable
 private fun VersionNotes(version: AppVersion, antiFeatureNames: Map<String, String>, modifier: Modifier = Modifier) {
     val context = LocalContext.current
@@ -506,13 +570,17 @@ private fun VersionNotes(version: AppVersion, antiFeatureNames: Map<String, Stri
             version.minSdk?.let { stringResource(R.string.details_min_sdk, it) },
             version.sizeBytes?.let { Formatter.formatShortFileSize(context, it) },
         )
+
+        // Requirements line
         if (facts.isNotEmpty()) {
             Text(
-                facts.joinToString("  ·  "),
+                facts.joinToString(FACT_SEPARATOR),
                 style = MaterialTheme.typography.labelMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
+
+        // Anti-features line
         if (version.antiFeatures.isNotEmpty()) {
             Text(
                 stringResource(
@@ -523,6 +591,8 @@ private fun VersionNotes(version: AppVersion, antiFeatureNames: Map<String, Stri
                 color = MaterialTheme.colorScheme.error,
             )
         }
+
+        // Release notes
         version.whatsNew?.let {
             SectionTitle(stringResource(R.string.details_whats_new), Modifier.offset(x = (-8).dp))
             Text(it, style = MaterialTheme.typography.bodyMedium)
@@ -530,7 +600,9 @@ private fun VersionNotes(version: AppVersion, antiFeatureNames: Map<String, Stri
     }
 }
 
-/** Full-screen, swipeable screenshots. A tap anywhere closes it. */
+/**
+ *  Full-screen, swipeable screenshots. A tap anywhere closes it.
+ */
 @Composable
 private fun ScreenshotViewer(urls: List<String>, initialPage: Int, onDismiss: () -> Unit) {
     Dialog(
@@ -538,10 +610,13 @@ private fun ScreenshotViewer(urls: List<String>, initialPage: Int, onDismiss: ()
         properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false),
     ) {
         val pager = rememberPagerState(initialPage) { urls.size }
+
+        // Screenshot pager
         HorizontalPager(
             state = pager,
             pageSpacing = 16.dp,
-            modifier = Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.92f)),
+            modifier = Modifier.fillMaxSize()
+                .background(MaterialTheme.colorScheme.scrim.copy(alpha = VIEWER_SCRIM_ALPHA)),
         ) { page ->
             AsyncImage(
                 model = urls[page],

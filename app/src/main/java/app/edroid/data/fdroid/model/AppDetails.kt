@@ -19,6 +19,7 @@ data class AppDetails(
     val versions: List<AppVersion>,
 ) {
     companion object {
+        /** Builds the full detail view of [packageName] from its raw index entry. */
         fun from(
             packageName: String,
             pkg: PackageV2,
@@ -29,11 +30,12 @@ data class AppDetails(
             val all = pkg.versions.values
             val signer = meta.preferredSigner
             val signed = if (signer == null) all else all.filter { it.manifest.signer?.sha256?.contains(signer) == true }
-            // Phone screenshots read best in the portrait strip; tablets only as a fallback.
             val shots = meta.screenshots
+
             val screenshots = listOf(shots?.phone, shots?.sevenInch, shots?.tenInch)
                 .firstNotNullOfOrNull { it?.localized(locale)?.takeIf(List<FileV2>::isNotEmpty) }
                 .orEmpty()
+
             return AppDetails(
                 packageName = packageName,
                 description = meta.description?.localized(locale)?.trim()?.takeIf { it.isNotEmpty() },
@@ -54,7 +56,6 @@ data class AppVersion(
     val versionCode: Long,
     val added: Long,
     val apkUrl: String,
-    /** Hex sha256 of the APK, checked before it is handed to the system installer. */
     val sha256: String,
     val sizeBytes: Long?,
     val minSdk: Int?,
@@ -62,6 +63,10 @@ data class AppVersion(
     val antiFeatures: Set<String>,
 ) {
     companion object {
+
+        /**
+         * Maps one raw index version to an installable [AppVersion].
+         */
         fun from(v: PackageVersionV2, repo: Repository, locale: Locale = Locale.getDefault()) = AppVersion(
             versionName = v.versionName,
             versionCode = v.versionCode,

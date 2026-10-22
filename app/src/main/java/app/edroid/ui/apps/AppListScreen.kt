@@ -107,6 +107,18 @@ private const val GRID_COLUMNS = 3
 /** Corner radius of the standalone spotlight card. */
 private val FeaturedCardRadius = 32.dp
 
+/** Alpha applied to secondary text on a tonal card. */
+private const val SECONDARY_TEXT_ALPHA = 0.8f
+
+/** Width of the wordmark as a fraction of the screen. */
+private const val LOGO_WIDTH_FRACTION = 0.62f
+
+/** Rotation, in degrees, of the sort arrow while the menu is open. */
+private const val SORT_ARROW_OPEN_DEGREES = 180f
+
+/** Width of the loading progress bar as a fraction of its column. */
+private const val LOADING_PROGRESS_FRACTION = 0.7f
+
 /** App icons previewed on the updates card. */
 private const val UPDATE_ICONS_SHOWN = 3
 
@@ -132,29 +144,30 @@ fun AppListScreen(
     onAppClick: (App) -> Unit,
     onUpdatesClick: () -> Unit,
     viewModel: AppListViewModel = viewModel(factory = AppListViewModel.Factory),
-    // The Updates tab's view model (same activity store), so the card matches that tab's list.
     updatesViewModel: UpdatesViewModel = viewModel(factory = UpdatesViewModel.Factory),
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val updates = updatesViewModel.uiState.collectAsStateWithLifecycle().value.updates.orEmpty()
 
-    // Only a pull-initiated refresh drives the pull indicator; background syncs keep using the
-    // inline strip so the indicator doesn't pop in on its own. Cleared once the sync settles.
     var pullRefreshing by remember { mutableStateOf(false) }
     val syncing = state.sync is SyncState.Loading
-    LaunchedEffect(syncing) { if (!syncing) pullRefreshing = false }
 
-    // Re-checked on every resume, since the user grants it in system Settings and comes back.
+    LaunchedEffect(syncing) {
+        if (!syncing) {
+            pullRefreshing = false
+        }
+    }
+
     val context = LocalContext.current
     var canInstall by remember { mutableStateOf(true) }
-    // Hidden until the app process restarts.
     var installCardHidden by rememberSaveable { mutableStateOf(false) }
+    val pullState = rememberPullToRefreshState()
+
     LifecycleResumeEffect(Unit) {
         canInstall = context.packageManager.canRequestPackageInstalls()
         onPauseOrDispose { }
     }
 
-    val pullState = rememberPullToRefreshState()
     PullToRefreshBox(
         isRefreshing = pullRefreshing,
         onRefresh = {
@@ -180,7 +193,11 @@ fun AppListScreen(
             horizontalArrangement = Arrangement.spacedBy(GroupedItemSpacing),
             verticalArrangement = Arrangement.spacedBy(GroupedItemSpacing),
         ) {
+
+            // Wordmark
             fullLineItem(key = "logo") { LogoHeader() }
+
+            // Install permission card
             if (!canInstall && !installCardHidden) fullLineItem(key = "install-permission") {
                 InstallPermissionCard(
                     animateGridItem(),
@@ -192,21 +209,24 @@ fun AppListScreen(
                     },
                 )
             }
-            // Loading and error variants use distinct keys so a switch between them crossfades
-            // rather than swapping content inside the same slot.
+
             val sync = state.sync
+
             if (state.hasData) {
                 when (sync) {
                     is SyncState.Loading -> fullLineItem(key = "sync-loading") {
                         SyncStrip(sync, animateGridItem())
                     }
+
                     is SyncState.Error -> fullLineItem(key = "sync-error") {
                         SyncErrorRow(sync.message, animateGridItem()) {
                             viewModel.refresh(force = true)
                         }
                     }
+
                     SyncState.Idle -> Unit
                 }
+
                 homeItems(
                     state.featured, updates, state.apps, state.sort,
                     viewModel::onSortSelected, viewModel::shuffleFeatured, onUpdatesClick, onAppClick,
@@ -216,11 +236,13 @@ fun AppListScreen(
                     is SyncState.Loading -> fullLineItem(key = "loading") {
                         LoadingContent(sync, animateGridItem())
                     }
+
                     is SyncState.Error -> fullLineItem(key = "error") {
                         ErrorContent(sync.message, animateGridItem()) {
                             viewModel.refresh(force = true)
                         }
                     }
+
                     SyncState.Idle -> Unit
                 }
             }
@@ -228,18 +250,22 @@ fun AppListScreen(
     }
 }
 
-/** An item spanning the whole row, for everything on the page that isn't an app tile. */
+/**
+ * An item spanning the whole row, for everything on the page that isn't an app tile.
+ */
 private fun LazyGridScope.fullLineItem(key: Any, content: @Composable LazyGridItemScope.() -> Unit) =
     item(key = key, span = { GridItemSpan(maxLineSpan) }, content = content)
 
-/** The wordmark, centred with generous room above and below like a splash. */
+/**
+ * The wordmark, centred with generous room above and below like a splash.
+ */
 @Composable
 private fun LogoHeader() {
     Box(
         modifier = Modifier.fillMaxWidth().padding(top = 56.dp, bottom = 64.dp),
         contentAlignment = Alignment.Center,
     ) {
-        EDroidLogo(modifier = Modifier.fillMaxWidth(0.62f))
+        EDroidLogo(modifier = Modifier.fillMaxWidth(LOGO_WIDTH_FRACTION))
     }
 }
 
@@ -258,29 +284,41 @@ private fun InstallPermissionCard(modifier: Modifier = Modifier, onHide: () -> U
             contentColor = colors.onSecondaryContainer,
         ),
     ) {
-        Column(Modifier.padding(start = 24.dp, end = 24.dp, top = 24.dp, bottom = 20.dp)) {
-            Row {
+        Column(
+            modifier = Modifier.padding(start = 24.dp, end = 24.dp, top = 24.dp, bottom = 20.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp),
+        ) {
+
+            // Explanation row
+            Row(horizontalArrangement = Arrangement.spacedBy(20.dp)) {
+
+                // Plug badge
                 Box(
                     Modifier.size(56.dp).clip(CircleShape).background(colors.secondary),
                     contentAlignment = Alignment.Center,
                 ) {
                     Icon(Icons.Rounded.Power, contentDescription = null, tint = colors.onSecondary)
                 }
-                Spacer(Modifier.width(20.dp))
-                Column(Modifier.weight(1f)) {
+
+                // Title and body
+                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Text(stringResource(R.string.home_install_permission_title), style = MaterialTheme.typography.titleLarge)
-                    Spacer(Modifier.height(8.dp))
                     Text(stringResource(R.string.home_install_permission_body), style = MaterialTheme.typography.bodyMedium)
                 }
             }
-            Spacer(Modifier.height(16.dp))
+
+            // Action row
             Row(
                 Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End),
             ) {
+
+                // Hide button
                 TextButton(onClick = onHide) {
                     Text(stringResource(R.string.home_install_permission_hide), color = colors.secondary)
                 }
+
+                // Grant button
                 Button(
                     onClick = onGrant,
                     colors = ButtonDefaults.buttonColors(containerColor = colors.secondary, contentColor = colors.onSecondary),
@@ -292,11 +330,16 @@ private fun InstallPermissionCard(modifier: Modifier = Modifier, onHide: () -> U
     }
 }
 
-/** Section title and compact card for pending updates, between the spotlight and the grid. */
+/**
+ * Section title and compact card for pending updates, between the spotlight and the grid.
+ */
 private fun LazyGridScope.updatesItems(updates: List<AppUpdate>, onClick: () -> Unit) {
+    // Updates section title
     fullLineItem(key = "updates-title") {
         SectionTitle(stringResource(R.string.home_updates_title), modifier = animateGridItem().padding(top = 16.dp))
     }
+
+    // Updates card
     fullLineItem(key = "updates") {
         UpdatesCard(updates, onClick = onClick, modifier = animateGridItem())
     }
@@ -321,10 +364,15 @@ private fun UpdatesCard(updates: List<AppUpdate>, onClick: () -> Unit, modifier:
             modifier = Modifier.padding(start = 16.dp, end = 12.dp, top = 12.dp, bottom = 12.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
+
+            // App icons
             Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                 updates.take(UPDATE_ICONS_SHOWN).forEach { AppIcon(it.app, Modifier.size(32.dp)) }
             }
+
             Spacer(Modifier.width(12.dp))
+
+            // Count and hint
             Column(Modifier.weight(1f)) {
                 Text(
                     pluralStringResource(R.plurals.updates_count, updates.size, updates.size),
@@ -335,11 +383,14 @@ private fun UpdatesCard(updates: List<AppUpdate>, onClick: () -> Unit, modifier:
                 Text(
                     stringResource(R.string.updates_see_more),
                     style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.8f),
+                    color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = SECONDARY_TEXT_ALPHA),
                     maxLines = 1,
                 )
             }
+
             Spacer(Modifier.width(8.dp))
+
+            // Forward arrow
             Icon(Icons.AutoMirrored.Rounded.ArrowForward, contentDescription = null, modifier = Modifier.size(20.dp))
         }
     }
@@ -356,6 +407,7 @@ private fun LazyGridScope.homeItems(
     onUpdatesClick: () -> Unit,
     onAppClick: (App) -> Unit,
 ) {
+    // Empty state
     if (featured == null) {
         fullLineItem(key = "empty") {
             Box(
@@ -367,14 +419,26 @@ private fun LazyGridScope.homeItems(
         }
         return
     }
+
+    // Spotlight section title
     fullLineItem(key = "featured-title") {
         SectionTitle(stringResource(R.string.home_featured_title))
     }
+
+    // Spotlight card
     fullLineItem(key = "featured") {
         FeaturedAppCard(featured, onClick = { onAppClick(featured) }, onShuffle = onShuffle, modifier = animateGridItem())
     }
-    if (updates.isNotEmpty()) updatesItems(updates, onUpdatesClick)
-    if (apps.isEmpty()) return
+
+    if (updates.isNotEmpty()) {
+        updatesItems(updates, onUpdatesClick)
+    }
+
+    if (apps.isEmpty()) {
+        return
+    }
+
+    // Other apps title and sort menu
     fullLineItem(key = "others-title") {
         Row(
             modifier = Modifier.fillMaxWidth().padding(top = 16.dp),
@@ -387,6 +451,8 @@ private fun LazyGridScope.homeItems(
             SortMenu(sort, onSortSelected)
         }
     }
+
+    // Other apps grid
     itemsIndexed(apps, key = { _, app -> app.packageName }) { index, app ->
         AppTile(
             app,
@@ -401,12 +467,16 @@ private fun LazyGridScope.homeItems(
 @Composable
 private fun SortMenu(selected: AppSort, onSelect: (AppSort) -> Unit) {
     var expanded by remember { mutableStateOf(false) }
+
     val arrowRotation by animateFloatAsState(
-        targetValue = if (expanded) 180f else 0f,
+        targetValue = if (expanded) SORT_ARROW_OPEN_DEGREES else 0f,
         animationSpec = MaterialTheme.motionScheme.fastSpatialSpec(),
         label = "sortArrow",
     )
+
     Box {
+
+        // Sort pill
         Surface(
             onClick = { expanded = true },
             shape = CircleShape,
@@ -426,6 +496,8 @@ private fun SortMenu(selected: AppSort, onSelect: (AppSort) -> Unit) {
                 )
             }
         }
+
+        // Sort choices
         DropdownMenu(
             expanded = expanded,
             onDismissRequest = { expanded = false },
@@ -457,11 +529,14 @@ private fun SortMenu(selected: AppSort, onSelect: (AppSort) -> Unit) {
 @Composable
 private fun AppIcon(app: App, modifier: Modifier = Modifier) {
     var loaded by remember(app.iconUrl) { mutableStateOf(false) }
+
     val placeholder by animateColorAsState(
         targetValue = if (loaded) Color.Transparent else MaterialTheme.colorScheme.primaryContainer,
         animationSpec = MaterialTheme.motionScheme.defaultEffectsSpec(),
         label = "iconPlaceholder",
     )
+
+    // Icon on placeholder
     Surface(
         shape = MaterialTheme.shapes.large,
         color = placeholder,
@@ -492,19 +567,27 @@ private fun FeaturedAppCard(app: App, onClick: () -> Unit, onShuffle: () -> Unit
             contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
         ),
     ) {
-        Column(Modifier.padding(start = 24.dp, end = 24.dp, top = 28.dp, bottom = 24.dp)) {
-            // Only the app crossfades on shuffle; the buttons below stay put and morph instead.
+        Column(
+            modifier = Modifier.padding(start = 24.dp, end = 24.dp, top = 28.dp, bottom = 24.dp),
+            verticalArrangement = Arrangement.spacedBy(24.dp),
+        ) {
             val motion = MaterialTheme.motionScheme
+
             AnimatedContent(
                 targetState = app,
                 contentKey = { it.packageName },
                 transitionSpec = { fadeIn(motion.defaultEffectsSpec()).togetherWith(fadeOut(motion.fastEffectsSpec())) },
                 label = "featuredApp",
             ) { shown ->
-                Row(verticalAlignment = Alignment.CenterVertically) {
+
+                // App icon, name and summary
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(24.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
                     AppIcon(shown, Modifier.size(80.dp))
-                    Spacer(Modifier.width(24.dp))
-                    Column(modifier = Modifier.weight(1f)) {
+
+                    Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         Text(
                             shown.name,
                             style = MaterialTheme.typography.titleLarge,
@@ -512,11 +595,10 @@ private fun FeaturedAppCard(app: App, onClick: () -> Unit, onShuffle: () -> Unit
                             overflow = TextOverflow.Ellipsis,
                         )
                         shown.summary?.let {
-                            Spacer(Modifier.height(8.dp))
                             Text(
                                 it,
                                 style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.8f),
+                                color = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = SECONDARY_TEXT_ALPHA),
                                 maxLines = 3,
                                 overflow = TextOverflow.Ellipsis,
                             )
@@ -524,14 +606,21 @@ private fun FeaturedAppCard(app: App, onClick: () -> Unit, onShuffle: () -> Unit
                     }
                 }
             }
-            Spacer(Modifier.height(24.dp))
+
+            // Install and details actions
             FeaturedActions(app, onDetails = onClick, onShuffle = onShuffle)
         }
     }
 }
 
+/**
+ * Height of the spotlight card's action buttons.
+ */
 private val FeaturedButtonHeight = 48.dp
-/** Install's width at rest; the same as Cancel's, so it only slides over when a download starts. */
+
+/**
+ * Install's width at rest; the same as Cancel's, so it only slides over when a download starts.
+ */
 private val FeaturedInstallWidth = CancelWidth
 
 /**
@@ -547,21 +636,26 @@ private fun FeaturedActions(app: App, onDetails: () -> Unit, onShuffle: () -> Un
         version = remember(app) { app.suggestedVersion() },
         latestVersionCode = app.latestVersionCode,
         allowUninstall = false,
-        // The detail page toasts failures; it may be open over Home for this very app.
         reportFailures = false,
     )
     val busy = actions.state.busy
+
     BoxWithConstraints(Modifier.fillMaxWidth()) {
-        // The shuffle button keeps its place, so everything else lives left of it.
         val room = maxWidth - FeaturedButtonHeight - ActionGap
+
         val slotTarget = when {
             busy -> room
             actions.state.trailing == TrailingAction.None -> 0.dp
             else -> FeaturedInstallWidth
         }
+
         val slot = animateDpAsState(slotTarget, bouncySpring(), label = "featuredInstall").value.coerceIn(0.dp, room)
+
+        // Install and details row
         Row(Modifier.width(room), verticalAlignment = Alignment.CenterVertically) {
             InstallActions(actions, Modifier.width(slot), height = FeaturedButtonHeight)
+
+            // Details button
             AnimatedVisibility(
                 visible = !busy,
                 enter = fadeIn() + expandHorizontally(),
@@ -572,9 +666,11 @@ private fun FeaturedActions(app: App, onDetails: () -> Unit, onShuffle: () -> Un
                 }
             }
         }
+
+        // Shuffle button
         FilledIconButton(
             onClick = onShuffle,
-            shape = RoundedCornerShape(16.dp),
+            shape = MaterialTheme.shapes.large,
             colors = IconButtonDefaults.filledIconButtonColors(
                 containerColor = Layering.item,
                 contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
@@ -586,7 +682,9 @@ private fun FeaturedActions(app: App, onDetails: () -> Unit, onShuffle: () -> Un
     }
 }
 
-/** One cell of the "Other apps" grid: icon filling the tile width, name centred underneath. */
+/**
+ * One cell of the "Other apps" grid: icon filling the tile width, name centred underneath.
+ */
 @Composable
 private fun AppTile(app: App, shape: Shape, modifier: Modifier = Modifier, onClick: () -> Unit) {
     Card(
@@ -599,10 +697,12 @@ private fun AppTile(app: App, shape: Shape, modifier: Modifier = Modifier, onCli
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(start = 14.dp, end = 14.dp, top = 14.dp, bottom = 12.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
             AppIcon(app, Modifier.fillMaxWidth().aspectRatio(1f))
-            Spacer(Modifier.height(8.dp))
+
+            // App name
             Text(
                 app.name,
                 style = MaterialTheme.typography.titleSmall,
@@ -614,6 +714,9 @@ private fun AppTile(app: App, shape: Shape, modifier: Modifier = Modifier, onCli
     }
 }
 
+/**
+ * String resource describing this loading phase.
+ */
 private val SyncState.Loading.Phase.label: Int
     get() = when (this) {
         SyncState.Loading.Phase.FETCHING_ENTRY -> R.string.loading_entry
@@ -621,21 +724,28 @@ private val SyncState.Loading.Phase.label: Int
         SyncState.Loading.Phase.PARSING -> R.string.loading_parsing
     }
 
-/** Slim status line shown below the wordmark while a refresh runs over a loaded index. */
+/**
+ * Slim status line shown below the wordmark while a refresh runs over a loaded index.
+ */
 @Composable
 private fun SyncStrip(state: SyncState.Loading, modifier: Modifier = Modifier) {
     Column(
         modifier = modifier
             .fillMaxWidth()
             .padding(horizontal = 12.dp, vertical = 4.dp),
+        verticalArrangement = Arrangement.spacedBy(6.dp),
     ) {
+
+        // Phase label
         Text(
             stringResource(state.phase.label),
             style = MaterialTheme.typography.labelMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
-        Spacer(Modifier.height(6.dp))
+
+        // Progress bar
         val progress = state.progress
+
         if (progress != null) {
             LinearWavyProgressIndicator(progress = { progress }, modifier = Modifier.fillMaxWidth())
         } else {
@@ -644,7 +754,9 @@ private fun SyncStrip(state: SyncState.Loading, modifier: Modifier = Modifier) {
     }
 }
 
-/** Compact failure notice over an already-loaded index: the cached apps stay usable. */
+/**
+ * Compact failure notice over an already-loaded index: the cached apps stay usable.
+ */
 @Composable
 private fun SyncErrorRow(message: String, modifier: Modifier = Modifier, onRetry: () -> Unit) {
     Row(
@@ -653,13 +765,18 @@ private fun SyncErrorRow(message: String, modifier: Modifier = Modifier, onRetry
             .padding(horizontal = 12.dp, vertical = 4.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
+
+        // Warning icon
         Icon(
             Icons.Rounded.Warning,
             contentDescription = null,
             tint = MaterialTheme.colorScheme.error,
             modifier = Modifier.size(20.dp),
         )
+
         Spacer(Modifier.width(8.dp))
+
+        // Error message
         Text(
             message,
             style = MaterialTheme.typography.bodySmall,
@@ -668,50 +785,74 @@ private fun SyncErrorRow(message: String, modifier: Modifier = Modifier, onRetry
             overflow = TextOverflow.Ellipsis,
             modifier = Modifier.weight(1f),
         )
+
+        // Retry button
         TextButton(onClick = onRetry) { Text(stringResource(R.string.action_retry)) }
     }
 }
 
+/**
+ * Full-size loading view for a cold start: spinner, phase label and progress bar.
+ */
 @Composable
 private fun LoadingContent(state: SyncState.Loading, modifier: Modifier = Modifier) {
     Column(
         modifier = modifier.fillMaxWidth().padding(32.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
+
+        // Spinner
         LoadingIndicator(modifier = Modifier.size(72.dp))
         Spacer(Modifier.height(24.dp))
+
+        // Phase label
         Text(stringResource(state.phase.label), style = MaterialTheme.typography.titleMedium)
         Spacer(Modifier.height(16.dp))
+
+        // Progress bar
         val progress = state.progress
+
         if (progress != null) {
-            LinearWavyProgressIndicator(progress = { progress }, modifier = Modifier.fillMaxWidth(0.7f))
+            LinearWavyProgressIndicator(progress = { progress }, modifier = Modifier.fillMaxWidth(LOADING_PROGRESS_FRACTION))
         } else {
-            LinearWavyProgressIndicator(modifier = Modifier.fillMaxWidth(0.7f))
+            LinearWavyProgressIndicator(modifier = Modifier.fillMaxWidth(LOADING_PROGRESS_FRACTION))
         }
     }
 }
 
+/**
+ * Full-size failure view for a cold start, with a retry button.
+ */
 @Composable
 private fun ErrorContent(message: String, modifier: Modifier = Modifier, onRetry: () -> Unit) {
     Column(
         modifier = modifier.fillMaxWidth().padding(32.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
+
+        // Warning icon
         Icon(
             Icons.Rounded.Warning,
             contentDescription = null,
             tint = MaterialTheme.colorScheme.error,
             modifier = Modifier.size(48.dp),
         )
+
         Spacer(Modifier.height(16.dp))
+
+        // Error title and message
         Text(stringResource(R.string.error_title), style = MaterialTheme.typography.headlineSmall)
         Spacer(Modifier.height(8.dp))
+
         Text(
             message,
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
+
         Spacer(Modifier.height(24.dp))
+
+        // Retry button
         Button(onClick = onRetry) { Text(stringResource(R.string.action_retry)) }
     }
 }
