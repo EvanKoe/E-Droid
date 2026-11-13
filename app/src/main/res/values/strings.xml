@@ -15,6 +15,7 @@
     <string name="git_error_no_apk">The latest release has no APK</string>
     <string name="git_error_not_apk">The downloaded file is not a valid APK</string>
     <string name="git_error_network">Couldn\'t check the release: %1$s</string>
+    <string name="git_error_refresh">Couldn\'t check releases for %1$s repo(s), try again later</string>
     <string name="git_checking">Checking releases…</string>
     <string name="git_downloading_percent">Downloading %1$d%%</string>
     <string name="git_latest">Latest: %1$s</string>

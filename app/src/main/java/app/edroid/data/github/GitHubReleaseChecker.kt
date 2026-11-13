@@ -4,6 +4,7 @@ import android.content.Context
 import android.util.Log
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.withContext
 import app.edroid.data.install.installedVersionCodeNow
 import java.io.File
@@ -22,6 +23,8 @@ class GitHubReleaseChecker(
     private val service: GitHubReleaseService,
     private val apkDir: File,
 ) {
+    private val checkMutex = Mutex()
+
     fun apkFile(repo: GitHubRepo, assetName: String) =
         File(apkDir, "${repo.owner}_${repo.name}/${File(assetName).name}")
 
@@ -72,28 +75,70 @@ class GitHubReleaseChecker(
 
     fun updatableCount() = store.repos.value.count(::isUpdatable)
 
-    /** Re-tracks every followed repo whose latest release tag changed; one failure never stops the rest. */
-    suspend fun checkAll() {
-        for (tracked in store.repos.value) {
-            val latest = tracked.latest ?: continue
-            try {
-                val release = service.latestRelease(tracked.repo) ?: continue
-                if (release.tagName == latest.tag) continue
-                val asset = release.apkAssets.firstOrNull { it.name == latest.assetName }
-                if (asset == null) {
-                    store.markNeedsChoice(tracked.repo)
-                    continue
-                }
-                (track(tracked.repo, asset) as? TrackResult.Tracked)?.let { store.update(tracked.repo, it.apk) }
-            } catch (e: CancellationException) {
-                throw e
-            } catch (e: Exception) {
-                Log.w(TAG, "Update check failed for ${tracked.repo}", e)
-            }
+    /**
+     * Re-tracks every followed repo whose latest release tag changed and returns how many repos
+     * could not be checked; one failure never stops the rest. A call made while another check
+     * runs does nothing and returns 0, so the worker and a pull never download the same APK twice.
+     */
+    suspend fun checkAll(): Int {
+        if (!checkMutex.tryLock()) {
+            return 0
         }
+
+        try {
+            return countFailures(
+                items = store.repos.value,
+                onFailure = { tracked, e -> Log.w(TAG, "Update check failed for ${tracked.repo}", e) },
+                action = ::check,
+            )
+        } finally {
+            checkMutex.unlock()
+        }
+    }
+
+    /**
+     * Re-tracks [tracked] when its latest release tag changed; throws when GitHub or the download fails.
+     */
+    private suspend fun check(tracked: TrackedRepo) {
+        val latest = tracked.latest ?: return
+        val release = service.latestRelease(tracked.repo) ?: return
+        if (release.tagName == latest.tag) {
+            return
+        }
+
+        val asset = release.apkAssets.firstOrNull { it.name == latest.assetName }
+        if (asset == null) {
+            store.markNeedsChoice(tracked.repo)
+            return
+        }
+
+        (track(tracked.repo, asset) as? TrackResult.Tracked)?.let { store.update(tracked.repo, it.apk) }
     }
 
     private companion object {
         const val TAG = "GitHubReleaseChecker"
     }
+}
+
+/**
+ * Runs [action] on every item and returns how many threw. A failure is handed to [onFailure] and
+ * never stops the rest; cancellation is rethrown.
+ */
+internal suspend fun <T> countFailures(
+    items: List<T>,
+    onFailure: (T, Exception) -> Unit = { _, _ -> },
+    action: suspend (T) -> Unit,
+): Int {
+    var failures = 0
+    for (item in items) {
+        try {
+            action(item)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            failures++
+            onFailure(item, e)
+        }
+    }
+    return failures
 }

@@ -99,7 +99,10 @@ class GitViewModel(
         if (!_refreshing.compareAndSet(expect = false, update = true)) return
         viewModelScope.launch {
             try {
-                checker.checkAll()
+                val failed = checker.checkAll()
+                if (failed > 0) {
+                    _messages.trySend(UiText(R.string.git_error_refresh, failed.toString()))
+                }
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
