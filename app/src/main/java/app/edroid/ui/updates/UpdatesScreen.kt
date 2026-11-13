@@ -5,7 +5,6 @@ import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -34,14 +33,11 @@ import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
-import androidx.compose.material3.SwipeToDismissBox
-import androidx.compose.material3.SwipeToDismissBoxValue
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.material3.pulltorefresh.PullToRefreshDefaults
 import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
-import androidx.compose.material3.rememberSwipeToDismissBoxState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -72,6 +68,7 @@ import app.edroid.ui.components.CancelWidth
 import app.edroid.ui.components.InstallActions
 import app.edroid.ui.components.PageTitle
 import app.edroid.ui.components.appInstallActions
+import app.edroid.ui.components.SwipeAction
 import app.edroid.ui.components.bouncySpring
 import app.edroid.ui.theme.GroupedItemSpacing
 import app.edroid.ui.theme.Layering
@@ -191,9 +188,11 @@ fun UpdatesScreen(
                     itemsIndexed(visible, key = { _, update -> update.app.packageName }) { index, update ->
                         val shape = groupedShapeAt(index, visible.size)
 
-                        SwipeToHide(
+                        SwipeAction(
                             shape = shape,
-                            onHide = { viewModel.setHidden(update.app.packageName, true) },
+                            icon = Icons.Rounded.VisibilityOff,
+                            label = R.string.updates_hide,
+                            onAction = { viewModel.setHidden(update.app.packageName, true) },
                             modifier = animateListItem(),
                         ) {
                             UpdateCard(
@@ -279,51 +278,6 @@ private fun EmptyState(loading: Boolean) {
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             textAlign = TextAlign.Center,
         )
-    }
-}
-
-/**
- * Swiping the row towards the start uncovers a "Hide" backdrop and, once settled, hides the app.
- */
-@Composable
-private fun SwipeToHide(
-    shape: Shape,
-    onHide: () -> Unit,
-    modifier: Modifier = Modifier,
-    content: @Composable () -> Unit,
-) {
-    val dismissState = rememberSwipeToDismissBoxState()
-
-    SwipeToDismissBox(
-        state = dismissState,
-        modifier = modifier,
-        enableDismissFromStartToEnd = false,
-        onDismiss = {
-            if (it == SwipeToDismissBoxValue.EndToStart) {
-                onHide()
-            }
-        },
-        // Hide backdrop
-        backgroundContent = {
-            Row(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .clip(shape)
-                    .background(MaterialTheme.colorScheme.secondaryContainer)
-                    .padding(horizontal = 20.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Icon(Icons.Rounded.VisibilityOff, contentDescription = null, tint = MaterialTheme.colorScheme.onSecondaryContainer)
-                Text(
-                    stringResource(R.string.updates_hide),
-                    style = MaterialTheme.typography.labelLarge,
-                    color = MaterialTheme.colorScheme.onSecondaryContainer,
-                )
-            }
-        },
-    ) {
-        content()
     }
 }
 

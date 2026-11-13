@@ -41,6 +41,14 @@ class GitHubRepoStore(context: Context, private val json: Json) {
     fun markNeedsChoice(repo: GitHubRepo) = replace(repo) { it.copy(needsChoice = true) }
 
     /**
+     * Stops following [repo]; the app installed from it, if any, is left alone.
+     */
+    fun remove(repo: GitHubRepo) {
+        val key = TrackedRepo(repo).key
+        persist { current -> current.filterNot { it.key == key } }
+    }
+
+    /**
      * Applies [change] to the entry matching [repo] and persists the result.
      */
     private fun replace(repo: GitHubRepo, change: (TrackedRepo) -> TrackedRepo) {

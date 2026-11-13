@@ -30,7 +30,19 @@ class GitHubReleaseChecker(
      * Where [assetName] of [repo] is stored on disk; [File.getName] strips any path from the asset name.
      */
     fun apkFile(repo: GitHubRepo, assetName: String) =
-        File(apkDir, "${repo.owner}_${repo.name}/${File(assetName).name}")
+        File(repoDir(repo), File(assetName).name)
+
+    /**
+     * Directory holding every APK downloaded for [repo].
+     */
+    private fun repoDir(repo: GitHubRepo) = File(apkDir, "${repo.owner}_${repo.name}")
+
+    /**
+     * Deletes the APKs downloaded for [repo]; the installed app is not touched.
+     */
+    suspend fun deleteDownloads(repo: GitHubRepo) = withContext(Dispatchers.IO) {
+        repoDir(repo).deleteRecursively()
+    }
 
     /**
      * Downloads the latest release's APK for [repo] and reads its manifest. [chosen] overrides the

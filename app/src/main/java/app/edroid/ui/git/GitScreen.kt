@@ -29,6 +29,7 @@ import androidx.compose.material.icons.rounded.Delete
 import androidx.compose.material.icons.rounded.Download
 import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.Refresh
+import androidx.compose.material.icons.rounded.RemoveCircleOutline
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -50,6 +51,7 @@ import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -76,6 +78,7 @@ import app.edroid.ui.components.AppInstallActions
 import app.edroid.ui.components.GitIcon
 import app.edroid.ui.components.InstallActions
 import app.edroid.ui.components.PageTitle
+import app.edroid.ui.components.SwipeAction
 import app.edroid.ui.components.appInstallActions
 import app.edroid.ui.options.UiText
 import app.edroid.ui.search.SearchField
@@ -181,7 +184,20 @@ fun GitScreen(
 
             // Repo cards
             shown.forEachIndexed { index, row ->
-                GitRepoCard(row, groupedShapeAt(index, shown.size), viewModel)
+                val shape = groupedShapeAt(index, shown.size)
+
+                // Keyed so a removed row's swipe state is not handed to the row that takes its place.
+                key(row.tracked.key) {
+                    SwipeAction(
+                        shape = shape,
+                        icon = Icons.Rounded.RemoveCircleOutline,
+                        label = R.string.action_remove,
+                        onAction = { viewModel.remove(row.tracked.repo) },
+                        containerColor = MaterialTheme.colorScheme.errorContainer,
+                    ) {
+                        GitRepoCard(row, shape, viewModel)
+                    }
+                }
             }
 
             Spacer(Modifier.height(AddButtonClearance))

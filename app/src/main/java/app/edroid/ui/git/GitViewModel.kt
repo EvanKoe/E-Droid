@@ -126,6 +126,17 @@ class GitViewModel(
     }
 
     /**
+     * Stops following [repo] and deletes its downloaded APKs. The app installed from it stays installed.
+     */
+    fun remove(repo: GitHubRepo) {
+        val key = TrackedRepo(repo).key
+        jobs.remove(key)?.cancel()
+        drop(key)
+        store.remove(repo)
+        viewModelScope.launch { checker.deleteDownloads(repo) }
+    }
+
+    /**
      * Pull-to-refresh; the only path that checks every repo, so opening the tab never hits the network.
      */
     fun refresh() {
