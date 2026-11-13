@@ -28,6 +28,7 @@ data class AppUpdate(
     val installedVersionName: String?,
 )
 
+/** Immutable snapshot of everything the updates screen renders. */
 data class UpdatesUiState(
     val sync: SyncState = SyncState.Idle,
     /** Out-of-date apps, alphabetically; null until both the index and the installed list are read. */
@@ -36,6 +37,7 @@ data class UpdatesUiState(
     val hidden: List<AppUpdate> = emptyList(),
 )
 
+/** Holds the updates screen state: installed apps the index has newer versions of. */
 class UpdatesViewModel(
     private val repository: RepoHub,
     private val settings: SettingsStore,
@@ -57,21 +59,34 @@ class UpdatesViewModel(
             .sortedWith(compareBy(collator) { it.app.name })
     }.flowOn(Dispatchers.Default)
 
+    /** Single state stream the screen collects. */
     val uiState: StateFlow<UpdatesUiState> =
         combine(updates, settings.hiddenUpdates, repository.sync) { updates, hiddenNames, sync ->
             val (hidden, visible) = updates.orEmpty().partition { it.app.packageName in hiddenNames }
             UpdatesUiState(sync, updates?.let { visible }, hidden)
-        }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), UpdatesUiState())
+        }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MS), UpdatesUiState())
 
-    /** Pull-to-refresh: re-syncs every repo so newly published versions show up. */
+    /**
+     * Pull-to-refresh: re-syncs every repo so newly published versions show up.
+     */
     fun refresh() {
-        if (refreshJob?.isActive == true) return
+        if (refreshJob?.isActive == true) {
+            return
+        }
+
         refreshJob = viewModelScope.launch { repository.refresh() }
     }
 
+    /**
+     * Hides or unhides the update for [packageName] in the persisted settings.
+     */
     fun setHidden(packageName: String, hidden: Boolean) = settings.setUpdateHidden(packageName, hidden)
 
     companion object {
+        /** How long state flows stay hot after the last subscriber leaves. */
+        private const val STOP_TIMEOUT_MS = 5_000L
+
+        /** Builds the ViewModel from the application's container. */
         val Factory: ViewModelProvider.Factory = viewModelFactory {
             initializer {
                 val app = this[ViewModelProvider.AndroidViewModelFactory.APPLICATION_KEY] as EDroidApp

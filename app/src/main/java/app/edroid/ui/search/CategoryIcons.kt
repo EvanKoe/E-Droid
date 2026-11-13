@@ -125,53 +125,37 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.graphics.shapes.RoundedPolygon
 
-/**
- * Icon for an F-Droid category id (the untranslated key of `repo.categories`, e.g. "Puzzle Game").
- * Covers the official repo's catalogue plus the legacy pre-2024 ids that third-party repos still
- * use; anything else falls back to a generic glyph so new categories still render.
- */
-fun categoryIcon(id: String): ImageVector = CategoryIcons[id] ?: Icons.Rounded.Category
-
-/**
- * Badge color for a category: picked from [CategoryColors] by hashing the id, so it looks random
- * but each category keeps the same color across launches. Mid-tone so white icons read on it in
- * both light and dark themes.
- */
-fun categoryColor(id: String): Color = CategoryColors[Math.floorMod(id.hashCode(), CategoryColors.size)]
-
-/** Expressive shape behind a category's icon badge; hashed like [categoryColor] but decorrelated. */
+/** Shapes a category icon badge can take. */
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
-fun categoryIconShape(id: String): RoundedPolygon {
-    val shapes = listOf(
-        MaterialShapes.Cookie4Sided,
-        MaterialShapes.Cookie6Sided,
-        MaterialShapes.Cookie7Sided,
-        MaterialShapes.Cookie9Sided,
-        MaterialShapes.Sunny,
-        MaterialShapes.Clover4Leaf,
-        MaterialShapes.Arch,
-        MaterialShapes.Square,
-        MaterialShapes.Circle,
-        MaterialShapes.Gem,
-        MaterialShapes.Puffy,
-        MaterialShapes.PuffyDiamond,
-        MaterialShapes.SoftBurst,
-    )
-    return shapes[Math.floorMod(id.reversed().hashCode(), shapes.size)]
-}
+private val IconShapes: List<RoundedPolygon> = listOf(
+    MaterialShapes.Cookie4Sided,
+    MaterialShapes.Cookie6Sided,
+    MaterialShapes.Cookie7Sided,
+    MaterialShapes.Cookie9Sided,
+    MaterialShapes.Sunny,
+    MaterialShapes.Clover4Leaf,
+    MaterialShapes.Arch,
+    MaterialShapes.Square,
+    MaterialShapes.Circle,
+    MaterialShapes.Gem,
+    MaterialShapes.Puffy,
+    MaterialShapes.PuffyDiamond,
+    MaterialShapes.SoftBurst,
+)
 
-/** Large wavy shape that bleeds off the end of a full-width category banner. */
+/** Shapes a category banner accent can take. */
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
-fun categoryBannerShape(id: String): RoundedPolygon {
-    val shapes = listOf(
-        MaterialShapes.Cookie9Sided,
-        MaterialShapes.Cookie12Sided,
-        MaterialShapes.Sunny,
-        MaterialShapes.SoftBurst,
-    )
-    return shapes[Math.floorMod(id.reversed().hashCode(), shapes.size)]
-}
+private val BannerShapes: List<RoundedPolygon> = listOf(
+    MaterialShapes.Cookie9Sided,
+    MaterialShapes.Cookie12Sided,
+    MaterialShapes.Sunny,
+    MaterialShapes.SoftBurst,
+)
 
+/**
+ * Fixed mid-tone badge palette. Deliberately not themed: the colour must stay stable per category
+ * across wallpapers and light/dark so a category is recognisable by its badge.
+ */
 private val CategoryColors = listOf(
     Color(0xFF6A52A8), // purple
     Color(0xFF10B37D), // emerald
@@ -187,6 +171,7 @@ private val CategoryColors = listOf(
     Color(0xFFD45B4F), // red
 )
 
+/** Icon per F-Droid category id, including legacy ids. */
 private val CategoryIcons: Map<String, ImageVector> = mapOf(
     "Action Game" to Icons.Rounded.SportsEsports,
     "AI Chat" to Icons.Rounded.SmartToy,
@@ -308,3 +293,29 @@ private val CategoryIcons: Map<String, ImageVector> = mapOf(
     "Money" to Icons.Rounded.Payments,
     "Time" to Icons.Rounded.AccessTime,
 )
+
+/**
+ * Icon for an F-Droid category id (the untranslated key of `repo.categories`, e.g. "Puzzle Game").
+ * Covers the official repo's catalogue plus the legacy pre-2024 ids that third-party repos still
+ * use; anything else falls back to a generic glyph so new categories still render.
+ */
+fun categoryIcon(id: String): ImageVector = CategoryIcons[id] ?: Icons.Rounded.Category
+
+/**
+ * Badge color for a category: picked from [CategoryColors] by hashing the id, so it looks random
+ * but each category keeps the same color across launches. Mid-tone so white icons read on it in
+ * both light and dark themes.
+ */
+fun categoryColor(id: String): Color = CategoryColors[Math.floorMod(id.hashCode(), CategoryColors.size)]
+
+/**
+ * Expressive shape behind a category's icon badge; hashed like [categoryColor] but decorrelated.
+ */
+fun categoryIconShape(id: String): RoundedPolygon =
+    IconShapes[Math.floorMod(id.reversed().hashCode(), IconShapes.size)]
+
+/**
+ * Large wavy shape that bleeds off the end of a full-width category banner.
+ */
+fun categoryBannerShape(id: String): RoundedPolygon =
+    BannerShapes[Math.floorMod(id.reversed().hashCode(), BannerShapes.size)]

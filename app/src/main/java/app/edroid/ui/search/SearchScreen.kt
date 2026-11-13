@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -78,6 +79,18 @@ import app.edroid.ui.theme.Layering
 import app.edroid.ui.theme.PageHorizontalPadding
 import app.edroid.ui.theme.groupedShapeAt
 
+/** Height of the fade under the search field; matches `MainScreen`'s top scrim extent. */
+private val FieldScrimHeight: Dp = 40.dp
+
+/** Gutter between tiles of the category grid. */
+private val CategoryGap: Dp = 8.dp
+
+/** Height of a banner or small category tile. */
+private val CategoryTileHeight: Dp = 96.dp
+
+/** Height of a tall tile, spanning two small tiles and the gutter between them. */
+private val CategoryTallTileHeight: Dp = CategoryTileHeight * 2 + CategoryGap
+
 /**
  * Search tab: page heading, a search field, then either the browse view (recent searches +
  * categories) or, once the user types, the matching apps. With several repos enabled, a row of
@@ -119,6 +132,7 @@ fun SearchScreen(
     // The heading and field stay put; only the list below them scrolls, so the lists get the
     // bottom clearance while the column takes the top and side insets.
     val listPadding = PaddingValues(top = 12.dp, bottom = contentPadding.calculateBottomPadding())
+
     // Hoisted so the field scrim can follow whichever list is showing.
     val browseListState = rememberLazyListState()
     val resultsListState = rememberLazyListState()
@@ -137,8 +151,13 @@ fun SearchScreen(
                 top = contentPadding.calculateTopPadding(),
             ),
     ) {
+
+        // Page title
         PageTitle(text = stringResource(R.string.search_title))
+
         Spacer(Modifier.height(8.dp))
+
+        // Search field
         SearchField(
             query = state.query,
             onQueryChange = viewModel::onQueryChange,
@@ -149,6 +168,8 @@ fun SearchScreen(
             onClear = viewModel::clearQuery,
             modifier = Modifier.focusRequester(fieldFocus),
         )
+
+        // Repo filter chips
         if (state.showResults && state.repos.size > 1) {
             RepoFilterRow(
                 repos = state.repos,
@@ -158,7 +179,10 @@ fun SearchScreen(
             )
         }
 
+        // Results or browse list
         Box(Modifier.weight(1f).fillMaxWidth()) {
+
+            // Active list
             if (state.showResults) {
                 ResultsList(state, resultsListState, listPadding, onAppClick = onAppClick)
             } else {
@@ -172,11 +196,13 @@ fun SearchScreen(
                 )
             }
 
+            // Field scrim
             // Like `MainScreen`'s top scrim, but under the field: scrolled rows fade out beneath
             // it instead of being cut off at its edge. It is taller than the list's resting gap,
             // so it fades in over the first stretch of scroll rather than veiling the top row at
             // rest. Alpha is read in the draw phase, so scrolling doesn't recompose.
             val surface = Layering.page
+
             Box(
                 modifier = Modifier
                     .align(Alignment.TopCenter)
@@ -201,9 +227,9 @@ fun SearchScreen(
     }
 }
 
-/** Height of the fade under the search field; matches `MainScreen`'s top scrim extent. */
-private val FieldScrimHeight: Dp = 40.dp
-
+/**
+ * Rounded search field with a leading search icon and a clear button once text is entered.
+ */
 @Composable
 internal fun SearchField(
     query: String,
@@ -240,7 +266,9 @@ internal fun SearchField(
     )
 }
 
-/** "All" followed by one chip per enabled repo; at most one is selected. */
+/**
+ * "All" followed by one chip per enabled repo; at most one is selected.
+ */
 @Composable
 private fun RepoFilterRow(
     repos: List<Pair<String, String>>,
@@ -249,15 +277,22 @@ private fun RepoFilterRow(
     modifier: Modifier = Modifier,
 ) {
     LazyRow(modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+
+        // All-repos chip
         item(key = "all") {
             RepoChip(stringResource(R.string.search_all_repos), selected = selectedId == null, onClick = { onSelected(null) })
         }
+
+        // Per-repo chips
         items(repos, key = { it.first }) { (id, name) ->
             RepoChip(name, selected = id == selectedId, onClick = { onSelected(id) })
         }
     }
 }
 
+/**
+ * A single filter chip showing a check mark while [selected].
+ */
 @Composable
 private fun RepoChip(label: String, selected: Boolean, onClick: () -> Unit) {
     FilterChip(
@@ -275,7 +310,9 @@ private fun RepoChip(label: String, selected: Boolean, onClick: () -> Unit) {
     )
 }
 
-/** Recent searches (up to three) followed by every repository category, as grouped lists. */
+/**
+ * Recent searches (up to three) followed by every repository category, as grouped lists.
+ */
 @Composable
 private fun BrowseList(
     state: SearchUiState,
@@ -290,6 +327,8 @@ private fun BrowseList(
         contentPadding = contentPadding,
         verticalArrangement = Arrangement.spacedBy(GroupedItemSpacing),
     ) {
+
+        // Recent searches section
         if (state.recentSearches.isNotEmpty()) {
             item(key = "recent-title") { SectionTitle(stringResource(R.string.recent_searches)) }
             itemsIndexed(state.recentSearches, key = { _, q -> "recent:$q" }) { index, query ->
@@ -302,7 +341,9 @@ private fun BrowseList(
             }
             item(key = "recent-gap") { Spacer(Modifier.height(8.dp)) }
         }
+
         if (state.categories.isNotEmpty()) {
+            // Categories section
             item(key = "categories-title") { SectionTitle(stringResource(R.string.categories)) }
             items(categoryBlocks(state.categories), key = { "cat:${it.categories.first().first}" }) { block ->
                 // The list spaces items for grouped rows; the bento grid wants a wider gutter.
@@ -313,6 +354,7 @@ private fun BrowseList(
                 )
             }
         } else if (!state.indexReady) {
+            // Index loading message
             item(key = "loading") {
                 Text(
                     stringResource(R.string.search_index_loading),
@@ -325,6 +367,9 @@ private fun BrowseList(
     }
 }
 
+/**
+ * Matching apps as a grouped list, or a placeholder message when there are none.
+ */
 @Composable
 private fun ResultsList(
     state: SearchUiState,
@@ -333,6 +378,8 @@ private fun ResultsList(
     onAppClick: (App) -> Unit,
 ) {
     Column(Modifier.fillMaxSize()) {
+
+        // Empty or loading placeholder
         if (state.results.isEmpty()) {
             Box(Modifier.fillMaxSize().padding(bottom = contentPadding.calculateBottomPadding()), contentAlignment = Alignment.Center) {
                 Text(
@@ -342,6 +389,8 @@ private fun ResultsList(
             }
             return
         }
+
+        // Result list
         LazyColumn(
             state = listState,
             contentPadding = contentPadding,
@@ -354,11 +403,19 @@ private fun ResultsList(
     }
 }
 
+/**
+ * A recent search that re-runs on tap and has a button to forget it.
+ */
 @Composable
 private fun RecentSearchRow(query: String, shape: Shape, onClick: () -> Unit, onRemove: () -> Unit) {
     GroupedRow(shape = shape, onClick = onClick) {
+
+        // Search icon
         Icon(Icons.Rounded.Search, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
+
         Spacer(Modifier.width(16.dp))
+
+        // Query text
         Text(
             query,
             style = MaterialTheme.typography.bodyLarge,
@@ -366,6 +423,8 @@ private fun RecentSearchRow(query: String, shape: Shape, onClick: () -> Unit, on
             overflow = TextOverflow.Ellipsis,
             modifier = Modifier.weight(1f),
         )
+
+        // Remove button
         IconButton(onClick = onRemove) {
             Icon(
                 Icons.Rounded.Clear,
@@ -375,10 +434,6 @@ private fun RecentSearchRow(query: String, shape: Shape, onClick: () -> Unit, on
         }
     }
 }
-
-private val CategoryGap: Dp = 8.dp
-private val CategoryTileHeight: Dp = 96.dp
-private val CategoryTallTileHeight: Dp = CategoryTileHeight * 2 + CategoryGap
 
 /**
  * One row of the bento category grid. Blocks cycle wide banner → tall tile on the start with two
@@ -398,6 +453,9 @@ private sealed interface CategoryBlock {
     data class Duo(override val categories: List<Pair<String, String>>) : CategoryBlock
 }
 
+/**
+ * Groups [categories] into bento blocks following the repeating wide, split, split pattern.
+ */
 private fun categoryBlocks(categories: List<Pair<String, String>>): List<CategoryBlock> {
     val blocks = mutableListOf<CategoryBlock>()
     var i = 0
@@ -414,6 +472,9 @@ private fun categoryBlocks(categories: List<Pair<String, String>>): List<Categor
     return blocks
 }
 
+/**
+ * Lays out one [CategoryBlock] as a banner, a pair of tiles or a tall tile beside two small ones.
+ */
 @Composable
 private fun CategoryBlockRow(
     block: CategoryBlock,
@@ -421,26 +482,39 @@ private fun CategoryBlockRow(
     modifier: Modifier = Modifier,
 ) {
     when (block) {
+
+        // Banner
         is CategoryBlock.Wide -> {
             val (id, name) = block.category
+
             CategoryBanner(id, name, onClick = { onCategorySelected(id, name) }, modifier = modifier)
         }
+
+        // Pair of small tiles
         is CategoryBlock.Duo -> Row(modifier, horizontalArrangement = Arrangement.spacedBy(CategoryGap)) {
             block.categories.forEach { (id, name) ->
                 CategorySmallTile(id, name, onClick = { onCategorySelected(id, name) }, modifier = Modifier.weight(1f))
             }
         }
+
+        // Tall tile beside two small tiles
         is CategoryBlock.Split -> Row(modifier, horizontalArrangement = Arrangement.spacedBy(CategoryGap)) {
             val tall = if (block.tallAtStart) block.categories.first() else block.categories[1]
             val smalls = block.categories - tall
+
+            // Tall tile at the start
             if (block.tallAtStart) {
                 CategoryTallTile(tall.first, tall.second, onClick = { onCategorySelected(tall.first, tall.second) }, modifier = Modifier.weight(1f))
             }
+
+            // Small tiles
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(CategoryGap)) {
                 smalls.forEach { (id, name) ->
                     CategorySmallTile(id, name, onClick = { onCategorySelected(id, name) })
                 }
             }
+
+            // Tall tile at the end
             if (!block.tallAtStart) {
                 CategoryTallTile(tall.first, tall.second, onClick = { onCategorySelected(tall.first, tall.second) }, modifier = Modifier.weight(1f))
             }
@@ -452,6 +526,9 @@ private fun CategoryBlockRow(
 @Immutable
 private class CategoryTileColors(val container: Color, val accent: Color, val content: Color)
 
+/**
+ * Derives the pastel container, accent and text colours of a category tile from the page colour.
+ */
 @Composable
 private fun categoryTileColors(id: String): CategoryTileColors {
     val accent = categoryColor(id)
@@ -464,6 +541,9 @@ private fun categoryTileColors(id: String): CategoryTileColors {
     )
 }
 
+/**
+ * Clickable tile surface of fixed [height], filled with [colors], hosting [content].
+ */
 @Composable
 private fun CategoryCard(
     colors: CategoryTileColors,
@@ -482,23 +562,33 @@ private fun CategoryCard(
     }
 }
 
-/** Icon on an expressive shape badge. */
+/**
+ * Icon on an expressive shape badge.
+ */
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 private fun CategoryBadge(id: String, color: Color, size: Dp, iconSize: Dp, modifier: Modifier = Modifier) {
     val shape = categoryIconShape(id).toShape()
+
     Box(modifier.size(size).background(color, shape), contentAlignment = Alignment.Center) {
+
+        // Category icon
         Icon(categoryIcon(id), contentDescription = null, tint = Color.White, modifier = Modifier.size(iconSize))
     }
 }
 
-/** Full-width banner: name on the start, a large wavy accent shape bleeding off the end. */
+/**
+ * Full-width banner: name on the start, a large wavy accent shape bleeding off the end.
+ */
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 private fun CategoryBanner(id: String, name: String, onClick: () -> Unit, modifier: Modifier = Modifier) {
     val colors = categoryTileColors(id)
     val shape = categoryBannerShape(id).toShape()
+
     CategoryCard(colors, onClick, CategoryTileHeight, modifier) {
+
+        // Accent shape
         Box(
             Modifier
                 .align(Alignment.CenterEnd)
@@ -506,12 +596,16 @@ private fun CategoryBanner(id: String, name: String, onClick: () -> Unit, modifi
                 .requiredSize(220.dp)
                 .background(colors.accent, shape),
         )
+
+        // Category icon
         Icon(
             categoryIcon(id),
             contentDescription = null,
             tint = Color.White,
             modifier = Modifier.align(Alignment.CenterEnd).padding(end = 50.dp).size(40.dp),
         )
+
+        // Category name
         Text(
             name,
             style = MaterialTheme.typography.headlineSmall,
@@ -523,12 +617,19 @@ private fun CategoryBanner(id: String, name: String, onClick: () -> Unit, modifi
     }
 }
 
-/** Double-height tile: big badge at the top, name anchored to the bottom. */
+/**
+ * Double-height tile: big badge at the top, name anchored to the bottom.
+ */
 @Composable
 private fun CategoryTallTile(id: String, name: String, onClick: () -> Unit, modifier: Modifier = Modifier) {
     val colors = categoryTileColors(id)
+
     CategoryCard(colors, onClick, CategoryTallTileHeight, modifier) {
+
+        // Badge
         CategoryBadge(id, colors.accent, size = 72.dp, iconSize = 34.dp, modifier = Modifier.padding(20.dp))
+
+        // Category name
         Text(
             name,
             style = MaterialTheme.typography.titleLarge,
@@ -540,17 +641,24 @@ private fun CategoryTallTile(id: String, name: String, onClick: () -> Unit, modi
     }
 }
 
-/** Single-height tile: small badge then the name, side by side. */
+/**
+ * Single-height tile: small badge then the name, side by side.
+ */
 @Composable
 private fun CategorySmallTile(id: String, name: String, onClick: () -> Unit, modifier: Modifier = Modifier) {
     val colors = categoryTileColors(id)
+
     CategoryCard(colors, onClick, CategoryTileHeight, modifier) {
+
+        // Badge and name row
         Row(
             modifier = Modifier.fillMaxSize().padding(horizontal = 14.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             CategoryBadge(id, colors.accent, size = 48.dp, iconSize = 24.dp)
+
             Spacer(Modifier.width(14.dp))
+
             Text(
                 name,
                 style = MaterialTheme.typography.titleSmall,
@@ -562,9 +670,11 @@ private fun CategorySmallTile(id: String, name: String, onClick: () -> Unit, mod
     }
 }
 
-/** A single-line grouped list row on the light `background` slab. */
+/**
+ * A single-line grouped list row on the light `background` slab.
+ */
 @Composable
-private fun GroupedRow(shape: Shape, onClick: () -> Unit, content: @Composable androidx.compose.foundation.layout.RowScope.() -> Unit) {
+private fun GroupedRow(shape: Shape, onClick: () -> Unit, content: @Composable RowScope.() -> Unit) {
     Card(
         onClick = onClick,
         shape = shape,

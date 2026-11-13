@@ -198,18 +198,21 @@ fun AppListScreen(
             fullLineItem(key = "logo") { LogoHeader() }
 
             // Install permission card
-            if (!canInstall && !installCardHidden) fullLineItem(key = "install-permission") {
-                InstallPermissionCard(
-                    animateGridItem(),
-                    onHide = { installCardHidden = true },
-                    onGrant = {
-                        context.startActivity(
-                            Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES, "package:${context.packageName}".toUri()),
-                        )
-                    },
-                )
+            if (!canInstall && !installCardHidden) {
+                fullLineItem(key = "install-permission") {
+                    InstallPermissionCard(
+                        animateGridItem(),
+                        onHide = { installCardHidden = true },
+                        onGrant = {
+                            context.startActivity(
+                                Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES, "package:${context.packageName}".toUri()),
+                            )
+                        },
+                    )
+                }
             }
 
+            // Sync status and content
             val sync = state.sync
 
             if (state.hasData) {
@@ -276,6 +279,7 @@ private fun LogoHeader() {
 @Composable
 private fun InstallPermissionCard(modifier: Modifier = Modifier, onHide: () -> Unit, onGrant: () -> Unit) {
     val colors = MaterialTheme.colorScheme
+
     Card(
         modifier = modifier.fillMaxWidth(),
         shape = RoundedCornerShape(FeaturedCardRadius),
@@ -396,7 +400,9 @@ private fun UpdatesCard(updates: List<AppUpdate>, onClick: () -> Unit, modifier:
     }
 }
 
-/** The spotlight card, any pending updates, and the grid of every other app, or an empty-state line. */
+/**
+ * The spotlight card, any pending updates, and the grid of every other app, or an empty-state line.
+ */
 private fun LazyGridScope.homeItems(
     featured: App?,
     updates: List<AppUpdate>,
@@ -463,7 +469,9 @@ private fun LazyGridScope.homeItems(
     }
 }
 
-/** Compact pill beside the "Other apps" title: shows the current order, opens the choices. */
+/**
+ * Compact pill beside the "Other apps" title: shows the current order, opens the choices.
+ */
 @Composable
 private fun SortMenu(selected: AppSort, onSelect: (AppSort) -> Unit) {
     var expanded by remember { mutableStateOf(false) }
@@ -573,6 +581,7 @@ private fun FeaturedAppCard(app: App, onClick: () -> Unit, onShuffle: () -> Unit
         ) {
             val motion = MaterialTheme.motionScheme
 
+            // Spotlight app
             AnimatedContent(
                 targetState = app,
                 contentKey = { it.packageName },
@@ -613,14 +622,10 @@ private fun FeaturedAppCard(app: App, onClick: () -> Unit, onShuffle: () -> Unit
     }
 }
 
-/**
- * Height of the spotlight card's action buttons.
- */
+/** Height of the spotlight card's action buttons. */
 private val FeaturedButtonHeight = 48.dp
 
-/**
- * Install's width at rest; the same as Cancel's, so it only slides over when a download starts.
- */
+/** Install's width at rest; the same as Cancel's, so it only slides over when a download starts. */
 private val FeaturedInstallWidth = CancelWidth
 
 /**
@@ -700,6 +705,8 @@ private fun AppTile(app: App, shape: Shape, modifier: Modifier = Modifier, onCli
             verticalArrangement = Arrangement.spacedBy(8.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
+
+            // App icon
             AppIcon(app, Modifier.fillMaxWidth().aspectRatio(1f))
 
             // App name
@@ -714,9 +721,7 @@ private fun AppTile(app: App, shape: Shape, modifier: Modifier = Modifier, onCli
     }
 }
 
-/**
- * String resource describing this loading phase.
- */
+/** String resource describing this loading phase. */
 private val SyncState.Loading.Phase.label: Int
     get() = when (this) {
         SyncState.Loading.Phase.FETCHING_ENTRY -> R.string.loading_entry
@@ -803,10 +808,12 @@ private fun LoadingContent(state: SyncState.Loading, modifier: Modifier = Modifi
 
         // Spinner
         LoadingIndicator(modifier = Modifier.size(72.dp))
+
         Spacer(Modifier.height(24.dp))
 
         // Phase label
         Text(stringResource(state.phase.label), style = MaterialTheme.typography.titleMedium)
+
         Spacer(Modifier.height(16.dp))
 
         // Progress bar
@@ -840,10 +847,12 @@ private fun ErrorContent(message: String, modifier: Modifier = Modifier, onRetry
 
         Spacer(Modifier.height(16.dp))
 
-        // Error title and message
+        // Error title
         Text(stringResource(R.string.error_title), style = MaterialTheme.typography.headlineSmall)
+
         Spacer(Modifier.height(8.dp))
 
+        // Error message
         Text(
             message,
             style = MaterialTheme.typography.bodyMedium,

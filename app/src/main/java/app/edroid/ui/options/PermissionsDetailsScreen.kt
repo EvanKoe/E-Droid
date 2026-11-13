@@ -100,6 +100,8 @@ fun PermissionsDetailsScreen(contentPadding: PaddingValues, modifier: Modifier =
             .padding(contentPadding),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
+
+        // Page heading and intro
         Column {
             PageTitle(text = stringResource(R.string.permissions_title))
             Text(
@@ -109,18 +111,28 @@ fun PermissionsDetailsScreen(contentPadding: PaddingValues, modifier: Modifier =
                 modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
             )
         }
+
+        // Permission cards
         Permissions.forEach { PermissionCard(it) }
     }
 }
 
+/**
+ * One permission explained: title, manifest name, why it is needed and what it is used for.
+ */
 @Composable
 private fun PermissionCard(permission: PermissionInfo) {
     val primary = MaterialTheme.colorScheme.primary
+
     Surface(shape = MaterialTheme.shapes.extraLarge, color = Layering.item, modifier = Modifier.fillMaxWidth()) {
         Column(modifier = Modifier.padding(horizontal = 20.dp, vertical = 24.dp)) {
+
+            // Title row
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Icon(permission.icon, contentDescription = null, tint = primary, modifier = Modifier.size(28.dp))
+
                 Spacer(Modifier.width(16.dp))
+
                 Text(
                     stringResource(permission.titleRes),
                     style = MaterialTheme.typography.headlineSmall,
@@ -128,12 +140,18 @@ private fun PermissionCard(permission: PermissionInfo) {
                     color = primary,
                     modifier = Modifier.weight(1f, fill = false),
                 )
+
+                // Optional pill
                 if (permission.optional) {
                     Spacer(Modifier.width(12.dp))
+
                     OptionalPill()
                 }
             }
+
             Spacer(Modifier.height(12.dp))
+
+            // Manifest name
             Text(
                 permission.manifestName,
                 style = MaterialTheme.typography.bodySmall,
@@ -141,19 +159,30 @@ private fun PermissionCard(permission: PermissionInfo) {
                 letterSpacing = 1.sp,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
+
             Spacer(Modifier.height(12.dp))
+
+            // Why it is needed
             Text(
                 stringResource(permission.whyRes),
                 style = MaterialTheme.typography.bodyLarge,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
+
             Spacer(Modifier.height(20.dp))
+
+            // Used-for heading
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Icon(Icons.Rounded.Check, contentDescription = null, tint = primary, modifier = Modifier.size(20.dp))
+
                 Spacer(Modifier.width(12.dp))
+
                 Text(stringResource(R.string.permissions_used_for), style = MaterialTheme.typography.titleMedium, color = primary)
             }
+
             Spacer(Modifier.height(8.dp))
+
+            // Uses list
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 stringArrayResource(permission.usesRes).forEach { BulletRow(it) }
             }
@@ -161,6 +190,9 @@ private fun PermissionCard(permission: PermissionInfo) {
     }
 }
 
+/**
+ * Small pill marking a permission the app works without.
+ */
 @Composable
 private fun OptionalPill() {
     Surface(shape = CircleShape, color = MaterialTheme.colorScheme.primaryContainer) {
@@ -173,14 +205,21 @@ private fun OptionalPill() {
     }
 }
 
+/**
+ * One bullet of a uses list; the dot stays aligned with the first line of [text].
+ */
 @Composable
 private fun BulletRow(text: String) {
     Row {
-        // Centers the dot on the first line of text, however many lines the bullet wraps to.
+
+        // Bullet dot: centers the dot on the first line of text, however many lines the bullet wraps to.
         Box(Modifier.height(20.dp), contentAlignment = Alignment.Center) {
             Box(Modifier.size(6.dp).background(MaterialTheme.colorScheme.onSurfaceVariant, CircleShape))
         }
+
         Spacer(Modifier.width(16.dp))
+
+        // Bullet text
         Text(text, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurface)
     }
 }

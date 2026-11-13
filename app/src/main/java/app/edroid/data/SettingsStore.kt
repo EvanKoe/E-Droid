@@ -14,6 +14,9 @@ class SettingsStore(context: Context) {
     /** Whether the app plays haptic feedback at all; on by default. */
     val hapticsEnabled: StateFlow<Boolean> = _hapticsEnabled.asStateFlow()
 
+    /**
+     * Turns haptic feedback on or off and persists the choice.
+     */
     fun setHapticsEnabled(enabled: Boolean) {
         _hapticsEnabled.value = enabled
         prefs.edit { putBoolean(KEY_HAPTICS, enabled) }
@@ -24,6 +27,9 @@ class SettingsStore(context: Context) {
     /** Package names the Updates tab keeps out of the available list until unhidden. */
     val hiddenUpdates: StateFlow<Set<String>> = _hiddenUpdates.asStateFlow()
 
+    /**
+     * Hides or unhides [packageName] in the Updates tab and persists the set.
+     */
     fun setUpdateHidden(packageName: String, hidden: Boolean) {
         val set = if (hidden) _hiddenUpdates.value + packageName else _hiddenUpdates.value - packageName
         _hiddenUpdates.value = set
@@ -31,8 +37,13 @@ class SettingsStore(context: Context) {
     }
 
     companion object {
+        /** SharedPreferences file name. */
         private const val PREFS_NAME = "settings"
+
+        /** Preference key of the haptics toggle. */
         private const val KEY_HAPTICS = "haptics_enabled"
+
+        /** Preference key of the hidden-updates set. */
         private const val KEY_HIDDEN_UPDATES = "hidden_updates"
     }
 }

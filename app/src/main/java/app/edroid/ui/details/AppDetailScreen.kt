@@ -93,6 +93,7 @@ private val IconTileSize = 96.dp
 
 /** How far the icon tile reaches up into the banner. */
 private val IconOverlap = 32.dp
+
 /** Width of the large carousel item; the medium and small ones are derived from it. */
 private val MediaPreferredWidth = 200.dp
 
@@ -182,6 +183,8 @@ fun AppDetailScreen(
             .padding(top = contentPadding.calculateTopPadding(), bottom = contentPadding.calculateBottomPadding()),
         verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
+
+        // Page title
         PageTitle(text = app?.name ?: packageName, modifier = inset)
 
         // Banner, icon and install actions
@@ -222,7 +225,9 @@ fun AppDetailScreen(
     }
 }
 
-/** Banner with the icon tile overlapping its bottom-start corner and [actions] beside the icon. */
+/**
+ * Banner with the icon tile overlapping its bottom-start corner and [actions] beside the icon.
+ */
 @Composable
 private fun Header(
     bannerUrl: String?,
@@ -232,6 +237,7 @@ private fun Header(
 ) {
     // Collapses when the app has no feature graphic or it fails to load.
     var bannerFailed by remember(bannerUrl) { mutableStateOf(false) }
+
     Layout(
         modifier = modifier,
         content = {
@@ -260,6 +266,7 @@ private fun Header(
         val banner = if (measurables.size > 1) measurables.first().measure(loose) else null
         val row = measurables.last().measure(loose)
         val rowY = banner?.let { it.height - IconOverlap.roundToPx() } ?: 0
+
         layout(constraints.maxWidth, rowY + row.height) {
             banner?.place(0, 0)
             row.place(0, rowY)
@@ -267,7 +274,9 @@ private fun Header(
     }
 }
 
-/** The feature graphic, on an item-colored tile while it loads. */
+/**
+ * The feature graphic, on an item-colored tile while it loads.
+ */
 @Composable
 private fun Banner(url: String, onError: () -> Unit, modifier: Modifier = Modifier) {
     AsyncImage(
@@ -281,7 +290,9 @@ private fun Banner(url: String, onError: () -> Unit, modifier: Modifier = Modifi
     )
 }
 
-/** App icon on an item-colored tile, ringed in the page color so it cuts into the banner. */
+/**
+ * App icon on an item-colored tile, ringed in the page color so it cuts into the banner.
+ */
 @Composable
 private fun IconTile(url: String?) {
     Surface(
@@ -298,7 +309,9 @@ private fun IconTile(url: String?) {
     }
 }
 
-/** Publisher, latest version and the description, or the summary while the description loads. */
+/**
+ * Publisher, latest version and the description, or the summary while the description loads.
+ */
 @Composable
 private fun InfoCard(app: App?, state: DetailsState, modifier: Modifier = Modifier) {
     Card(
@@ -338,10 +351,14 @@ private fun InfoCard(app: App?, state: DetailsState, modifier: Modifier = Modifi
             when (state) {
                 DetailsState.Loading -> {
                     Spacer(Modifier.height(8.dp))
+
                     LinearWavyProgressIndicator(modifier = Modifier.fillMaxWidth())
                 }
+
                 DetailsState.NotFound -> StatusText(stringResource(R.string.details_not_found))
+
                 is DetailsState.Failed -> StatusText(stringResource(R.string.details_error, state.message))
+
                 is DetailsState.Loaded -> Unit
             }
         }
@@ -377,11 +394,15 @@ private fun ExpandableDescription(raw: String) {
         style = MaterialTheme.typography.bodyMedium,
         maxLines = if (expanded) Int.MAX_VALUE else DESCRIPTION_COLLAPSED_LINES,
         overflow = TextOverflow.Ellipsis,
-        onTextLayout = { if (!expanded) overflows = it.hasVisualOverflow },
+        onTextLayout = {
+            if (!expanded) {
+                overflows = it.hasVisualOverflow
+            }
+        },
     )
-    if (overflows || expanded) {
 
-        // Show more/less button; shifted so the label lines up with the text rather than with the button's padding.
+    // Show more/less button; shifted so the label lines up with the text rather than with the button's padding.
+    if (overflows || expanded) {
         TextButton(onClick = { expanded = !expanded }, modifier = Modifier.offset(x = (-12).dp)) {
             Text(stringResource(if (expanded) R.string.details_show_less else R.string.details_show_more))
         }
@@ -458,6 +479,7 @@ private fun MediaStrip(state: DetailsState, onScreenshot: (Int) -> Unit, onVideo
             // Screenshot tile
             else -> {
                 val shot = index - offset
+
                 AsyncImage(
                     model = shots[shot],
                     contentDescription = stringResource(R.string.details_screenshot, shot + 1),
@@ -485,7 +507,9 @@ private fun VersionPicker(
     var expanded by remember { mutableStateOf(false) }
     val canExpand = versions.size > 1
 
-    /** Version name text, flagged as the latest when [isLatest]. */
+    /**
+     * Version name text, flagged as the latest when [isLatest].
+     */
     @Composable
     fun label(version: AppVersion?, isLatest: Boolean): String {
         val name = version?.versionName ?: fallbackVersionName.orEmpty()
@@ -565,7 +589,8 @@ private fun VersionPicker(
 @Composable
 private fun VersionNotes(version: AppVersion, antiFeatureNames: Map<String, String>, modifier: Modifier = Modifier) {
     val context = LocalContext.current
-    Column(modifier = modifier.padding(horizontal = 12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+
+    Column(modifier.padding(horizontal = 12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
         val facts = listOfNotNull(
             version.minSdk?.let { stringResource(R.string.details_min_sdk, it) },
             version.sizeBytes?.let { Formatter.formatShortFileSize(context, it) },

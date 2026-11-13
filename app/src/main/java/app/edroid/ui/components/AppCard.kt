@@ -44,7 +44,9 @@ private const val FOOTER_SEPARATOR = "  ·  "
 /** Number of summary lines shown before truncating. */
 private const val SUMMARY_MAX_LINES = 2
 
-/** One app in a grouped list: icon, name, summary and a version/date footer. */
+/**
+ * One app in a grouped list: icon, name, summary and a version/date footer.
+ */
 @Composable
 fun AppCard(
     app: App,
@@ -78,7 +80,7 @@ fun AppCard(
             }
 
             // Text column
-            Column(modifier = Modifier.weight(1f)) {
+            Column(Modifier.weight(1f)) {
 
                 // App name
                 Text(
@@ -112,7 +114,9 @@ fun AppCard(
     }
 }
 
-/** "Today", "3 days ago", or a short date for older timestamps. */
+/**
+ * "Today", "3 days ago", or a short date for older timestamps.
+ */
 fun relativeTime(epochMillis: Long): String =
     DateUtils.getRelativeTimeSpanString(
         epochMillis,

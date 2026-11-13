@@ -5,6 +5,7 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.sp
 
+/** Stock Material 3 type scale the app's styles are derived from. */
 private val Default = Typography()
 
 /**

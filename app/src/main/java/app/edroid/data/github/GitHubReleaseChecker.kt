@@ -10,6 +10,7 @@ import app.edroid.data.install.installedVersionCodeNow
 import java.io.File
 import java.io.IOException
 
+/** Outcome of [GitHubReleaseChecker.track]. */
 sealed interface TrackResult {
     data class Tracked(val apk: TrackedApk) : TrackResult
     data object NoApk : TrackResult
@@ -25,9 +26,17 @@ class GitHubReleaseChecker(
 ) {
     private val checkMutex = Mutex()
 
+    /**
+     * Where [assetName] of [repo] is stored on disk; [File.getName] strips any path from the asset name.
+     */
     fun apkFile(repo: GitHubRepo, assetName: String) =
         File(apkDir, "${repo.owner}_${repo.name}/${File(assetName).name}")
 
+    /**
+     * Downloads the latest release's APK for [repo] and reads its manifest. [chosen] overrides the
+     * asset pick; without it the previously tracked asset, or the only APK, is used.
+     * [onProgress] gets a 0..1 fraction, or null when the size is unknown.
+     */
     suspend fun track(
         repo: GitHubRepo,
         chosen: GitHubAsset? = null,
@@ -66,13 +75,18 @@ class GitHubReleaseChecker(
         )
     }
 
-    /** Whether the latest release of [tracked] is newer than the installed app; false when not installed. */
+    /**
+     * Whether the latest release of [tracked] is newer than the installed app; false when not installed.
+     */
     fun isUpdatable(tracked: TrackedRepo): Boolean {
         val latest = tracked.latest ?: return false
         val installed = context.installedVersionCodeNow(latest.packageName) ?: return false
         return latest.versionCode > installed
     }
 
+    /**
+     * Number of followed repos whose latest APK is newer than the installed app.
+     */
     fun updatableCount() = store.repos.value.count(::isUpdatable)
 
     /**
@@ -116,6 +130,7 @@ class GitHubReleaseChecker(
     }
 
     private companion object {
+        /** Log tag. */
         const val TAG = "GitHubReleaseChecker"
     }
 }

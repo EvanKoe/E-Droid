@@ -84,30 +84,43 @@ class RepoHub(
             enabled.map { list -> list.map { it.first.id }.toSet() }.distinctUntilChanged().collect { ids ->
                 val previous = known
                 known = ids
-                if (previous != null) (ids - previous).forEach { id -> launch { refreshOne(id, force = false) } }
+                if (previous != null) {
+                    (ids - previous).forEach { id -> launch { refreshOne(id, force = false) } }
+                }
             }
         }
     }
 
-    /** The loader for [repo], created on first use and kept even while the repo is disabled. */
+    /**
+     * The loader for [repo], created on first use and kept even while the repo is disabled.
+     */
     fun repository(repo: Repository): FDroidRepository =
         repositories.getOrPut(repo.id) { createRepository(repo) }
 
-    /** Refreshes every enabled repo in parallel; each one's failures stay in its own sync state. */
+    /**
+     * Refreshes every enabled repo in parallel; each one's failures stay in its own sync state.
+     */
     suspend fun refresh(force: Boolean = false) = coroutineScope {
         enabled.value.forEach { (repo, _) -> launch { refreshOne(repo.id, force) } }
     }
 
+    /**
+     * Refreshes the enabled repo with [id] and adopts the name its index announces; no-op if it is not enabled.
+     */
     private suspend fun refreshOne(id: String, force: Boolean) {
         val (repo, loader) = enabled.value.firstOrNull { it.first.id == id } ?: return
         loader.refresh(force)
         loader.snapshot.value?.repo?.name?.takeIf { it.isNotBlank() && it != repo.name }?.let { store.rename(id, it) }
     }
 
-    /** The merged row for [packageName], if an enabled repo lists it. */
+    /**
+     * The merged row for [packageName], if an enabled repo lists it.
+     */
     fun app(packageName: String): App? = snapshot.value?.apps?.firstOrNull { it.packageName == packageName }
 
-    /** Full details for [packageName], read from the repo whose copy won the merge. */
+    /**
+     * Full details for [packageName], read from the repo whose copy won the merge.
+     */
     suspend fun details(packageName: String): AppDetails? {
         checkNotNull(snapshot.value) { "Package index not downloaded yet" }
         val app = app(packageName) ?: return null
@@ -121,20 +134,40 @@ class RepoHub(
     suspend fun probe(address: String): SignedEntryReader.Result =
         service.fetchEntry(Repository(address = address, name = address, fingerprint = null))
 
+    /**
+     * Adds [repo] to the store, or replaces the one with the same id.
+     */
     fun add(repo: Repository) = store.add(repo)
 
+    /**
+     * Turns the repo with [id] on or off; see the class docs for what that does to its cache.
+     */
     fun setEnabled(id: String, enabled: Boolean) = store.setEnabled(id, enabled)
 
-    /** Removes a user-added repo and deletes its cached index in the background. */
+    /**
+     * Removes a user-added repo and deletes its cached index in the background.
+     */
     fun remove(repo: Repository) {
-        if (repo.isDefault) return
+        if (repo.isDefault) {
+            return
+        }
+
         store.remove(repo.id)
         repositories.remove(repo.id)?.let { scope.launch { it.deleteCache() } }
     }
 
+    /**
+     * Combines per-repo snapshots into one, de-duplicating apps by package name (see [NEWEST_FIRST]).
+     */
     private fun merge(snapshots: List<RepoSnapshot>): RepoSnapshot? {
-        if (snapshots.isEmpty()) return null
-        if (snapshots.size == 1) return snapshots.single()
+        if (snapshots.isEmpty()) {
+            return null
+        }
+
+        if (snapshots.size == 1) {
+            return snapshots.single()
+        }
+
         val byPackage = HashMap<String, App>(snapshots.sumOf { it.apps.size })
         snapshots.forEach { snapshot ->
             snapshot.apps.forEach { app ->
@@ -155,7 +188,9 @@ class RepoHub(
         return RepoSnapshot(info, apps, fromCache = snapshots.all { it.fromCache })
     }
 
-    /** Loading while any repo loads; otherwise an error naming every repo that failed. */
+    /**
+     * Loading while any repo loads; otherwise an error naming every repo that failed.
+     */
     private fun aggregate(repos: List<Repository>, states: List<SyncState>): SyncState {
         val loading = states.filterIsInstance<SyncState.Loading>()
         if (loading.isNotEmpty()) {
@@ -165,9 +200,16 @@ class RepoHub(
                 progress = if (progress.any { it == null }) null else progress.filterNotNull().average().toFloat(),
             )
         }
+
         val errors = repos.zip(states).filter { it.second is SyncState.Error }
-        if (errors.isEmpty()) return SyncState.Idle
-        if (repos.size == 1) return errors.single().second
+        if (errors.isEmpty()) {
+            return SyncState.Idle
+        }
+
+        if (repos.size == 1) {
+            return errors.single().second
+        }
+
         return SyncState.Error(
             message = errors.joinToString("\n") { (repo, state) -> "${repo.name}: ${(state as SyncState.Error).message}" },
             cause = (errors.first().second as SyncState.Error).cause,
@@ -175,6 +217,7 @@ class RepoHub(
     }
 
     private companion object {
+        /** Picks, between two repos' copies of an app, the one with the newest version. */
         val NEWEST_FIRST: Comparator<App> =
             compareByDescending<App> { it.latestVersionCode ?: Long.MIN_VALUE }.thenByDescending { it.lastUpdated }
     }

@@ -7,6 +7,9 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.graphics.vector.path
 import androidx.compose.ui.unit.dp
 
+/** Stroke width of the glyph, in viewport units. */
+private const val STROKE_WIDTH = 2f
+
 /** A git branch glyph (the Material icon set has none), stroked so it sits well beside the rounded icons. */
 val GitIcon: ImageVector = ImageVector.Builder(
     name = "Git",
@@ -17,7 +20,7 @@ val GitIcon: ImageVector = ImageVector.Builder(
 ).apply {
     path(
         stroke = SolidColor(Color.Black),
-        strokeLineWidth = 2f,
+        strokeLineWidth = STROKE_WIDTH,
         strokeLineCap = StrokeCap.Round,
     ) {
         // Trunk between the two left nodes.

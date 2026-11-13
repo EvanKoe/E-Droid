@@ -19,7 +19,9 @@ data class AppDetails(
     val versions: List<AppVersion>,
 ) {
     companion object {
-        /** Builds the full detail view of [packageName] from its raw index entry. */
+        /**
+         * Builds the full detail view of [packageName] from its raw index entry.
+         */
         fun from(
             packageName: String,
             pkg: PackageV2,

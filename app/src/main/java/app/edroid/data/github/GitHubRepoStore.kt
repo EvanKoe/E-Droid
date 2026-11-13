@@ -15,9 +15,12 @@ class GitHubRepoStore(context: Context, private val json: Json) {
     private val serializer = ListSerializer(TrackedRepo.serializer())
 
     private val _repos = MutableStateFlow(load())
+    /** The followed repos; the single source of truth for the Git tab. */
     val repos: StateFlow<List<TrackedRepo>> = _repos.asStateFlow()
 
-    /** Adds [tracked] at the end; false (and no change) when its repo is already followed, ignoring case. */
+    /**
+     * Adds [tracked] at the end; false (and no change) when its repo is already followed, ignoring case.
+     */
     fun add(tracked: TrackedRepo): Boolean {
         var added = false
         persist { current ->
@@ -27,28 +30,45 @@ class GitHubRepoStore(context: Context, private val json: Json) {
         return added
     }
 
+    /**
+     * Records [latest] as [repo]'s current APK and clears its pending asset choice.
+     */
     fun update(repo: GitHubRepo, latest: TrackedApk) = replace(repo) { it.copy(latest = latest, needsChoice = false) }
 
+    /**
+     * Flags [repo] as needing the user to pick an APK asset again.
+     */
     fun markNeedsChoice(repo: GitHubRepo) = replace(repo) { it.copy(needsChoice = true) }
 
+    /**
+     * Applies [change] to the entry matching [repo] and persists the result.
+     */
     private fun replace(repo: GitHubRepo, change: (TrackedRepo) -> TrackedRepo) {
         val key = TrackedRepo(repo).key
         persist { current -> current.map { if (it.key == key) change(it) else it } }
     }
 
-    // Synchronized so the worker and the UI cannot persist out of order.
+    /**
+     * Applies [change] to the list and writes it to disk. Synchronized so the worker and the UI cannot persist out of order.
+     */
     @Synchronized
     private fun persist(change: (List<TrackedRepo>) -> List<TrackedRepo>) {
         _repos.update(change)
         prefs.edit { putString(KEY, json.encodeToString(serializer, _repos.value)) }
     }
 
+    /**
+     * Reads the stored list, falling back to empty when it is missing or unreadable.
+     */
     private fun load(): List<TrackedRepo> = runCatching {
         prefs.getString(KEY, null)?.let { json.decodeFromString(serializer, it) }
     }.getOrNull().orEmpty()
 
     private companion object {
+        /** SharedPreferences file name. */
         const val PREFS_NAME = "github_repos"
+
+        /** Preference key holding the JSON list. */
         const val KEY = "list"
     }
 }

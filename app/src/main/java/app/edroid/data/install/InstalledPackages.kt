@@ -5,6 +5,7 @@ import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
 import android.net.Uri
+import android.util.Log
 import androidx.core.content.ContextCompat
 import androidx.core.content.pm.PackageInfoCompat
 import kotlinx.coroutines.Dispatchers
@@ -16,21 +17,32 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
 
-/** Installed versionCode of [packageName] right now, or null when it isn't installed. */
+/** Log tag. */
+private const val TAG = "InstalledPackages"
+
+/**
+ * Installed versionCode of [packageName] right now, or null when it isn't installed.
+ */
 fun Context.installedVersionCodeNow(packageName: String): Long? = runCatching {
     PackageInfoCompat.getLongVersionCode(packageManager.getPackageInfo(packageName, 0))
 }.getOrNull()
 
-/** Installed versionName of [packageName] right now, or null when it isn't installed or has none. */
+/**
+ * Installed versionName of [packageName] right now, or null when it isn't installed or has none.
+ */
 fun Context.installedVersionNameNow(packageName: String): String? = runCatching {
     packageManager.getPackageInfo(packageName, 0).versionName
 }.getOrNull()
 
-/** [installedVersionCodeNow] as a flow that follows installs and uninstalls. */
+/**
+ * [installedVersionCodeNow] as a flow that follows installs and uninstalls.
+ */
 fun Context.installedVersionCode(packageName: String): Flow<Long?> = callbackFlow {
     val receiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context, intent: Intent) {
-            if (intent.data?.schemeSpecificPart == packageName) trySend(installedVersionCodeNow(packageName))
+            if (intent.data?.schemeSpecificPart == packageName) {
+                trySend(installedVersionCodeNow(packageName))
+            }
         }
     }
     val filter = IntentFilter().apply {
@@ -48,7 +60,9 @@ fun Context.installedVersionCode(packageName: String): Flow<Long?> = callbackFlo
 /** What the package manager reports for one installed package. */
 data class InstalledPackage(val versionCode: Long, val versionName: String?)
 
-/** Every installed package by name, re-read whenever any package is installed, updated or removed. */
+/**
+ * Every installed package by name, re-read whenever any package is installed, updated or removed.
+ */
 fun Context.installedPackages(): Flow<Map<String, InstalledPackage>> = callbackFlow {
     val receiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context, intent: Intent) {
@@ -71,20 +85,29 @@ fun Context.installedPackages(): Flow<Map<String, InstalledPackage>> = callbackF
     .flowOn(Dispatchers.IO)
     .distinctUntilChanged()
 
+/**
+ * One synchronous read of every installed package from the package manager.
+ */
 private fun Context.installedPackagesNow(): Map<String, InstalledPackage> =
     packageManager.getInstalledPackages(0).associate {
         it.packageName to InstalledPackage(PackageInfoCompat.getLongVersionCode(it), it.versionName)
     }
 
-/** Whether [packageName] has a launcher activity [openApp] can start. */
+/**
+ * Whether [packageName] has a launcher activity [openApp] can start.
+ */
 fun Context.canOpenApp(packageName: String): Boolean = packageManager.getLaunchIntentForPackage(packageName) != null
 
-/** Starts [packageName]'s launcher activity, if it has one. */
+/**
+ * Starts [packageName]'s launcher activity, if it has one.
+ */
 fun Context.openApp(packageName: String) {
-    packageManager.getLaunchIntentForPackage(packageName)?.let { runCatching { startActivity(it) } }
+    packageManager.getLaunchIntentForPackage(packageName)?.let { runCatching { startActivity(it) }.onFailure { e -> Log.w(TAG, "Could not open $packageName", e) } }
 }
 
-/** Opens the system uninstall dialog for [packageName]. */
+/**
+ * Opens the system uninstall dialog for [packageName].
+ */
 fun Context.requestUninstall(packageName: String) {
     startActivity(Intent(Intent.ACTION_DELETE, Uri.fromParts("package", packageName, null)))
 }

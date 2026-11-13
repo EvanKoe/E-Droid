@@ -23,9 +23,15 @@ class InstallResultReceiver : BroadcastReceiver() {
     }
 
     companion object {
+        /** Broadcast action of the download notification's Cancel button. */
         private const val ACTION_CANCEL = "app.edroid.action.CANCEL_DOWNLOAD"
+
+        /** Extra naming the package whose download to cancel. */
         private const val EXTRA_PACKAGE = "package"
 
+        /**
+         * Broadcast the download notification's Cancel action fires for [packageName].
+         */
         fun cancelIntent(context: Context, packageName: String): PendingIntent {
             val intent = Intent(context, InstallResultReceiver::class.java)
                 .setAction(ACTION_CANCEL)
@@ -36,10 +42,13 @@ class InstallResultReceiver : BroadcastReceiver() {
             )
         }
 
+        /**
+         * Where the system reports [sessionId]'s status; handed to [android.content.pm.PackageInstaller.Session.commit].
+         */
         fun intentSender(context: Context, sessionId: Int): IntentSender {
             val intent = Intent(context, InstallResultReceiver::class.java)
             // Mutable: the system fills in the status extras.
-            val mutable = if (Build.VERSION.SDK_INT >= 31) PendingIntent.FLAG_MUTABLE else 0
+            val mutable = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) PendingIntent.FLAG_MUTABLE else 0
             return PendingIntent.getBroadcast(context, sessionId, intent, PendingIntent.FLAG_UPDATE_CURRENT or mutable)
                 .intentSender
         }

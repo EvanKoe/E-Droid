@@ -7,6 +7,7 @@ import java.security.MessageDigest
 import java.security.cert.X509Certificate
 import java.util.jar.JarFile
 
+/** Thrown when a repo entry.jar or index fails signature, fingerprint, size or hash verification. */
 class RepoVerificationException(message: String) : Exception(message)
 
 /**
@@ -22,8 +23,13 @@ class RepoVerificationException(message: String) : Exception(message)
  */
 class SignedEntryReader(private val json: Json) {
 
+    /** The verified [entry] and the [fingerprint] of the certificate that signed it. */
     data class Result(val entry: Entry, val fingerprint: String)
 
+    /**
+     * Verifies [jarFile] and decodes its `entry.json`. Throws [RepoVerificationException] when the
+     * layout is wrong, the file is unsigned or multi-signed, or [expectedFingerprint] (if given) differs.
+     */
     fun read(jarFile: File, expectedFingerprint: String?): Result {
         JarFile(jarFile, /* verify = */ true).use { jar ->
             val entries = jar.entries().asSequence()
@@ -38,8 +44,13 @@ class SignedEntryReader(private val json: Json) {
             // Must read fully before certificates are populated and the signature is checked.
             val bytes = jar.getInputStream(jsonEntry).use { it.readBytes() }
             val certs = jsonEntry.certificates.orEmpty().filterIsInstance<X509Certificate>()
-            if (certs.isEmpty()) throw RepoVerificationException("$ENTRY_FILE_NAME is not signed")
-            if (certs.size != 1) throw RepoVerificationException("$ENTRY_FILE_NAME has ${certs.size} signers, expected 1")
+            if (certs.isEmpty()) {
+                throw RepoVerificationException("$ENTRY_FILE_NAME is not signed")
+            }
+
+            if (certs.size != 1) {
+                throw RepoVerificationException("$ENTRY_FILE_NAME has ${certs.size} signers, expected 1")
+            }
 
             val fingerprint = sha256Hex(certs.single().encoded)
             if (expectedFingerprint != null && !fingerprint.equals(expectedFingerprint, ignoreCase = true)) {
@@ -47,14 +58,19 @@ class SignedEntryReader(private val json: Json) {
                     "Repository fingerprint mismatch: expected $expectedFingerprint, got $fingerprint",
                 )
             }
+
             val entry = json.decodeFromString(Entry.serializer(), bytes.decodeToString())
             return Result(entry, fingerprint)
         }
     }
 
     companion object {
+        /** The one signed file an entry.jar must contain. */
         const val ENTRY_FILE_NAME = "entry.json"
 
+        /**
+         * Returns the upper-case hex SHA-256 of [bytes].
+         */
         fun sha256Hex(bytes: ByteArray): String =
             MessageDigest.getInstance("SHA-256").digest(bytes).joinToString("") { "%02X".format(it) }
     }

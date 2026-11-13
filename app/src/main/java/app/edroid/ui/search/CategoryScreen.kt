@@ -32,6 +32,9 @@ import app.edroid.ui.theme.Layering
 import app.edroid.ui.theme.PageHorizontalPadding
 import app.edroid.ui.theme.groupedShapeAt
 
+/** Gap between the page heading and the first app card. */
+private val TitleBottomGap = 8.dp
+
 /**
  * Every app in one repository category, opened from the Search tab's category grid. Like the
  * detail page it is drawn over the tab by `MainScreen`, which swaps the nav bar for a back bar.
@@ -51,11 +54,14 @@ fun CategoryScreen(
     val context = LocalContext.current
     val repository = remember(context) { (context.applicationContext as EDroidApp).container.repoHub }
     val snapshot by repository.snapshot.collectAsStateWithLifecycle()
+
     val apps = remember(snapshot, categoryId) {
         snapshot?.apps.orEmpty().filter { categoryId in it.categories }
     }
+
     val title = snapshot?.repo?.categories?.get(categoryId) ?: name
 
+    // Empty or loading state
     if (apps.isEmpty()) {
         Column(
             modifier = modifier
@@ -67,7 +73,11 @@ fun CategoryScreen(
                     top = contentPadding.calculateTopPadding(),
                 ),
         ) {
+
+            // Page title
             PageTitle(text = title)
+
+            // Placeholder message
             Box(
                 Modifier.fillMaxSize().padding(bottom = contentPadding.calculateBottomPadding()),
                 contentAlignment = Alignment.Center,
@@ -94,12 +104,17 @@ fun CategoryScreen(
         ),
         verticalArrangement = Arrangement.spacedBy(GroupedItemSpacing),
     ) {
+
+        // Page title
         item(key = "title") {
             Column {
                 PageTitle(text = title)
-                Spacer(Modifier.height(8.dp))
+
+                Spacer(Modifier.height(TitleBottomGap))
             }
         }
+
+        // App list
         itemsIndexed(apps, key = { _, app -> app.packageName }) { index, app ->
             AppCard(app, shape = groupedShapeAt(index, apps.size), onClick = { onAppClick(app) })
         }

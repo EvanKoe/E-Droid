@@ -77,7 +77,10 @@ class FDroidRepoService(
                     transfer(url, tmp, indexFile.size, onProgress)
                     break
                 } catch (e: IOException) {
-                    if (attempt >= MAX_ATTEMPTS) throw e
+                    if (attempt >= MAX_ATTEMPTS) {
+                        throw e
+                    }
+
                     Log.w(TAG, "Download attempt $attempt failed (${e.message}), resuming at ${tmp.length()} bytes")
                     delay(RETRY_DELAY_MS * attempt)
                 }
@@ -86,12 +89,19 @@ class FDroidRepoService(
             if (tmp.length() != indexFile.size) {
                 throw RepoVerificationException("Index size mismatch: expected ${indexFile.size}, got ${tmp.length()}")
             }
+
             val actual = sha256(tmp)
             if (!actual.equals(indexFile.sha256, ignoreCase = true)) {
                 throw RepoVerificationException("Index SHA-256 mismatch for ${indexFile.name}")
             }
-            if (target.exists()) target.delete()
-            if (!tmp.renameTo(target)) throw IOException("Could not move ${tmp.name} into place")
+
+            if (target.exists()) {
+                target.delete()
+            }
+
+            if (!tmp.renameTo(target)) {
+                throw IOException("Could not move ${tmp.name} into place")
+            }
         } catch (e: RepoVerificationException) {
             tmp.delete() // corrupt or tampered: never resume from it
             throw e
@@ -100,7 +110,9 @@ class FDroidRepoService(
         }
     }
 
-    /** Streams [url] into [tmp], resuming from its current length when the server supports ranges. */
+    /**
+     * Streams [url] into [tmp], resuming from its current length when the server supports ranges.
+     */
     private suspend fun transfer(
         url: String,
         tmp: File,
@@ -112,29 +124,41 @@ class FDroidRepoService(
             tmp.delete()
             offset = 0
         }
-        if (offset == total) return
+
+        if (offset == total) {
+            return
+        }
 
         val builder = Request.Builder().url(url).header("User-Agent", USER_AGENT)
-        if (offset > 0) builder.header("Range", "bytes=$offset-")
+        if (offset > 0) {
+            builder.header("Range", "bytes=$offset-")
+        }
+
         val response = client.newCall(builder.build()).execute()
         response.use {
             val append = when (response.code) {
-                206 -> true
-                200 -> { offset = 0; false } // server ignored Range: start over
+                HTTP_PARTIAL_CONTENT -> true
+                HTTP_OK -> { offset = 0; false } // server ignored Range: start over
                 else -> throw IOException("HTTP ${response.code} for $url")
             }
             val body = response.body ?: throw IOException("Empty body for $url")
             body.byteStream().use { input ->
                 FileOutputStream(tmp, append).buffered().use { out ->
-                    val buf = ByteArray(64 * 1024)
+                    val buf = ByteArray(CHUNK_SIZE)
                     var read = offset
                     while (true) {
                         coroutineContext.ensureActive()
                         val n = input.read(buf)
-                        if (n < 0) break
+                        if (n < 0) {
+                            break
+                        }
+
                         out.write(buf, 0, n)
                         read += n
-                        if (read > total) throw RepoVerificationException("Index larger than announced size $total")
+                        if (read > total) {
+                            throw RepoVerificationException("Index larger than announced size $total")
+                        }
+
                         onProgress(read, total)
                     }
                 }
@@ -142,19 +166,28 @@ class FDroidRepoService(
         }
     }
 
+    /**
+     * Returns the lower-case hex SHA-256 of [file], read in chunks.
+     */
     private fun sha256(file: File): String {
         val digest = MessageDigest.getInstance("SHA-256")
-        file.inputStream().buffered(256 * 1024).use { input ->
-            val buf = ByteArray(64 * 1024)
+        file.inputStream().buffered(HASH_BUFFER_SIZE).use { input ->
+            val buf = ByteArray(CHUNK_SIZE)
             while (true) {
                 val n = input.read(buf)
-                if (n < 0) break
+                if (n < 0) {
+                    break
+                }
+
                 digest.update(buf, 0, n)
             }
         }
         return digest.digest().joinToString("") { "%02x".format(it) }
     }
 
+    /**
+     * Performs a GET for [url]; the caller must close the response. Throws [IOException] on a non-2xx status.
+     */
     private fun execute(url: String): Response {
         val request = Request.Builder()
             .url(url)
@@ -165,14 +198,36 @@ class FDroidRepoService(
             response.close()
             throw IOException("HTTP ${response.code} for $url")
         }
+
         return response
     }
 
     companion object {
+        /** File name of the signed entry at a repo's address. */
         const val ENTRY_JAR = "entry.jar"
+
+        /** Log tag. */
         private const val TAG = "FDroidRepoService"
+
+        /** User-Agent sent to F-Droid repos. */
         private const val USER_AGENT = "EDroid/0.1 (F-Droid index-v2 client)"
+
+        /** Download attempts before giving up on an index. */
         private const val MAX_ATTEMPTS = 5
+
+        /** Base delay between download attempts, multiplied by the attempt number. */
         private const val RETRY_DELAY_MS = 1_000L
+
+        /** Buffer size when hashing a downloaded index. */
+        private const val HASH_BUFFER_SIZE = 256 * 1024
+
+        /** Read size while streaming an index to disk. */
+        private const val CHUNK_SIZE = 64 * 1024
+
+        /** Status for a full response. */
+        private const val HTTP_OK = 200
+
+        /** Status for a resumed (ranged) response. */
+        private const val HTTP_PARTIAL_CONTENT = 206
     }
 }

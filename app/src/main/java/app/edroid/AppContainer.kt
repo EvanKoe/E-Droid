@@ -18,7 +18,10 @@ import kotlinx.coroutines.SupervisorJob
 import okhttp3.OkHttpClient
 import java.util.concurrent.TimeUnit
 
+/** OkHttp connect timeout. */
 private const val CONNECT_TIMEOUT_SECONDS = 20L
+
+/** OkHttp read timeout; indexes can be large. */
 private const val READ_TIMEOUT_SECONDS = 60L
 
 /**

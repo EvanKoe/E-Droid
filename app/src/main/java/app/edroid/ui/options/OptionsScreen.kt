@@ -16,7 +16,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowRight
@@ -45,6 +44,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.core.net.toUri
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -55,6 +55,15 @@ import app.edroid.ui.components.SectionTitle
 import app.edroid.ui.theme.GroupedItemSpacing
 import app.edroid.ui.theme.Layering
 import app.edroid.ui.theme.groupedShape
+
+/** Diameter of the circular icon badge on an Options row. */
+private val BadgeSize: Dp = 40.dp
+
+/** Size of the small leading icon inside a button. */
+private val ButtonIconSize: Dp = 18.dp
+
+/** Edge length of the developer's avatar. */
+private val AvatarSize: Dp = 112.dp
 
 /**
  * App settings, as a grouped list of entries that each open their own page.
@@ -72,9 +81,11 @@ fun OptionsScreen(
 ) {
     val hapticsEnabled by viewModel.hapticsEnabled.collectAsStateWithLifecycle()
     val context = LocalContext.current
+
     val openUrl = { url: String ->
         context.startActivity(Intent(Intent.ACTION_VIEW, url.toUri()).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
     }
+
     val githubUrl = stringResource(R.string.dev_card_github_url)
     val coffeeUrl = stringResource(R.string.dev_card_coffee_url)
     val linkedInUrl = stringResource(R.string.dev_card_linkedin_url)
@@ -86,8 +97,14 @@ fun OptionsScreen(
             .padding(contentPadding),
         verticalArrangement = Arrangement.spacedBy(GroupedItemSpacing),
     ) {
+
+        // Page title
         PageTitle(text = stringResource(R.string.options_title))
+
+        // General section
         SectionTitle(stringResource(R.string.options_general))
+
+        // Repositories entry
         OptionItem(
             icon = Icons.Rounded.Storage,
             title = stringResource(R.string.options_repos),
@@ -95,6 +112,8 @@ fun OptionsScreen(
             shape = groupedShape(isFirst = true),
             onClick = onReposClick,
         )
+
+        // Permissions entry
         OptionItem(
             icon = Icons.Rounded.Security,
             title = stringResource(R.string.options_permissions),
@@ -102,6 +121,8 @@ fun OptionsScreen(
             shape = groupedShape(),
             onClick = onPermissionsClick,
         )
+
+        // Haptics switch
         SwitchOptionItem(
             icon = Icons.Rounded.Vibration,
             title = stringResource(R.string.options_haptics),
@@ -110,7 +131,11 @@ fun OptionsScreen(
             checked = hapticsEnabled,
             onCheckedChange = viewModel::setHapticsEnabled,
         )
+
+        // About section
         SectionTitle(stringResource(R.string.options_about))
+
+        // Developer card
         DevCard(
             shape = groupedShape(isFirst = true, isLast = true),
             onOpenGitHub = { openUrl(githubUrl) },
@@ -120,7 +145,9 @@ fun OptionsScreen(
     }
 }
 
-/** One navigable row of the Options list: icon, title and summary, with a trailing chevron. */
+/**
+ * One navigable row of the Options list: icon, title and summary, with a trailing chevron.
+ */
 @Composable
 private fun OptionItem(
     icon: ImageVector,
@@ -130,6 +157,8 @@ private fun OptionItem(
     onClick: () -> Unit,
 ) {
     OptionCard(icon, title, summary, shape, onClick) {
+
+        // Chevron
         Icon(
             Icons.AutoMirrored.Rounded.KeyboardArrowRight,
             contentDescription = null,
@@ -138,7 +167,9 @@ private fun OptionItem(
     }
 }
 
-/** A boolean row of the Options list; tapping anywhere on it flips the trailing switch. */
+/**
+ * A boolean row of the Options list; tapping anywhere on it flips the trailing switch.
+ */
 @Composable
 private fun SwitchOptionItem(
     icon: ImageVector,
@@ -149,11 +180,15 @@ private fun SwitchOptionItem(
     onCheckedChange: (Boolean) -> Unit,
 ) {
     OptionCard(icon, title, summary, shape, onClick = { onCheckedChange(!checked) }) {
+
+        // Toggle switch
         Switch(checked = checked, onCheckedChange = onCheckedChange)
     }
 }
 
-/** Shared layout of an Options row: icon badge, title and summary, then [trailing]. */
+/**
+ * Shared layout of an Options row: icon badge, title and summary, then [trailing].
+ */
 @Composable
 private fun OptionCard(
     icon: ImageVector,
@@ -170,7 +205,9 @@ private fun OptionCard(
         colors = CardDefaults.cardColors(containerColor = Layering.item),
     ) {
         Row(modifier = Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
-            Surface(shape = CircleShape, color = MaterialTheme.colorScheme.primaryContainer, modifier = Modifier.size(40.dp)) {
+
+            // Icon badge
+            Surface(shape = CircleShape, color = MaterialTheme.colorScheme.primaryContainer, modifier = Modifier.size(BadgeSize)) {
                 Icon(
                     icon,
                     contentDescription = null,
@@ -178,7 +215,10 @@ private fun OptionCard(
                     modifier = Modifier.padding(8.dp),
                 )
             }
+
             Spacer(Modifier.width(16.dp))
+
+            // Title and summary
             Column(modifier = Modifier.weight(1f)) {
                 Text(title, style = MaterialTheme.typography.titleMedium)
                 Text(
@@ -187,13 +227,18 @@ private fun OptionCard(
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
+
             Spacer(Modifier.width(8.dp))
+
+            // Trailing control
             trailing()
         }
     }
 }
 
-/** The "about" card that closes the list: the developer's photo and the links out as filled buttons. */
+/**
+ * The "about" card that closes the list: the developer's photo and the links out as filled buttons.
+ */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun DevCard(
@@ -213,15 +258,18 @@ private fun DevCard(
                 .padding(horizontal = 20.dp, vertical = 24.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
+
+            // Developer avatar
             Image(
                 painter = painterResource(R.drawable.dev_avatar),
                 contentDescription = stringResource(R.string.dev_card_avatar),
                 contentScale = ContentScale.Crop,
                 modifier = Modifier
-                    .size(112.dp)
-                    .clip(RoundedCornerShape(28.dp)),
+                    .size(AvatarSize)
+                    .clip(MaterialTheme.shapes.extraLarge),
             )
 
+            // Author name
             Text(
                 text = stringResource(R.string.dev_card_author),
                 style = MaterialTheme.typography.bodyLarge,
@@ -229,29 +277,42 @@ private fun DevCard(
                 modifier = Modifier.padding(vertical = 20.dp),
             )
 
+            // Link buttons
             // Wraps to a second line on narrow screens rather than squeezing either label.
             FlowRow(
                 horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally),
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
+
+                // GitHub button
                 DevLinkButton(painterResource(R.drawable.ic_github), stringResource(R.string.dev_card_github), onOpenGitHub)
+
+                // Coffee button
                 Button(onClick = onOpenCoffee) {
-                    Icon(Icons.Rounded.Coffee, contentDescription = null, modifier = Modifier.size(18.dp))
+                    Icon(Icons.Rounded.Coffee, contentDescription = null, modifier = Modifier.size(ButtonIconSize))
+
                     Spacer(Modifier.width(8.dp))
+
                     Text(stringResource(R.string.dev_card_coffee))
                 }
+
+                // LinkedIn button
                 DevLinkButton(painterResource(R.drawable.ic_linkedin), stringResource(R.string.dev_card_linkedin), onOpenLinkedIn)
             }
         }
     }
 }
 
-/** A filled link button of [DevCard] with a drawable icon ahead of its label. */
+/**
+ * A filled link button of [DevCard] with a drawable icon ahead of its label.
+ */
 @Composable
-private fun DevLinkButton(icon: Painter,label: String, onClick: () -> Unit) {
+private fun DevLinkButton(icon: Painter, label: String, onClick: () -> Unit) {
     Button(onClick = onClick) {
-        Icon(icon, contentDescription = null, modifier = Modifier.size(18.dp))
+        Icon(icon, contentDescription = null, modifier = Modifier.size(ButtonIconSize))
+
         Spacer(Modifier.width(8.dp))
+
         Text(label)
     }
 }

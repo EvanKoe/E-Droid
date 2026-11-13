@@ -45,14 +45,31 @@ import java.security.MessageDigest
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicInteger
 
+/** Log tag. */
 private const val TAG = "ApkInstaller"
+
+/** Notification channel for install results. */
 private const val CHANNEL_ID = "installs"
+
+/** Name of the APK stream inside an install session. */
 private const val APK_NAME = "base.apk"
+
+/** Read size while streaming an APK. */
 private const val BUFFER_SIZE = 64 * 1024
+
+/** Lower-case hex for one byte of a digest. */
 private const val HEX_BYTE_FORMAT = "%02x"
+
+/** Progress scale shown in the notification. */
 private const val PERCENT = 100
+
+/** Request code of the "open app" tap intent. */
 private const val OPEN_APP_REQUEST_CODE = 0
+
+/** Download notification ids count down from here, away from the install ids. */
 private const val FIRST_DOWNLOAD_NOTIFICATION_ID = -1
+
+/** Notification channel for download progress; shared with [DownloadService]. */
 internal const val DOWNLOAD_CHANNEL_ID = "downloads"
 
 /** A download's progress notification, as [DownloadService] needs it to go foreground. */
@@ -124,7 +141,9 @@ class ApkInstaller(private val context: Context, private val client: OkHttpClien
         /** Latest progress notification, kept even without permission to post it: [DownloadService] still needs one. */
         @Volatile lateinit var notification: Notification
 
-        /** This download's notification in the form [DownloadService] consumes. */
+        /**
+         * This download's notification in the form [DownloadService] consumes.
+         */
         fun shown() = DownloadNotification(notificationId, notification)
     }
 
@@ -143,16 +162,20 @@ class ApkInstaller(private val context: Context, private val client: OkHttpClien
      */
     fun install(packageName: String, appName: String, version: AppVersion, source: File? = null) {
         val current = _states.value[packageName]
-        if (current is InstallState.Downloading || current is InstallState.Installing) return
+
+        if (current is InstallState.Downloading || current is InstallState.Installing) {
+            return
+        }
+
         val download = Download(Session(packageName, appName), nextNotificationId.getAndDecrement())
         setDownloading(download, null)
         downloads[packageName] = download
-        // Already running otherwise; it follows [foreground] from there.
+
         if (_foreground.compareAndSet(null, download.shown())) {
-            // Install is tapped in the UI, but don't lose the download if Android refuses anyway.
             runCatching { ContextCompat.startForegroundService(context, Intent(context, DownloadService::class.java)) }
                 .onFailure { Log.w(TAG, "Could not start DownloadService", it) }
         }
+
         download.job = scope.launch {
             try {
                 downloadAndCommit(download.target, version, download, source)
@@ -187,13 +210,16 @@ class ApkInstaller(private val context: Context, private val client: OkHttpClien
             it.job.cancel()
             it.call?.cancel()
         }
+
         sessions.entries.firstOrNull { it.value.packageName == packageName }?.key?.let { sessionId ->
             runCatching { context.packageManager.packageInstaller.abandonSession(sessionId) }
             finish(sessionId, InstallState.Idle)
         }
     }
 
-    /** Copies [input] into the session's base.apk, reporting progress; returns the SHA-256 as lowercase hex. */
+    /**
+     * Copies [input] into the session's base.apk, reporting progress; returns the SHA-256 as lowercase hex.
+     */
     private suspend fun writeApk(session: PackageInstaller.Session, input: InputStream, total: Long?, download: Download): String {
         val digest = MessageDigest.getInstance("SHA-256")
         session.openWrite(APK_NAME, 0, total ?: -1).use { out ->
@@ -203,7 +229,11 @@ class ApkInstaller(private val context: Context, private val client: OkHttpClien
             while (true) {
                 currentCoroutineContext().ensureActive()
                 val n = input.read(buffer)
-                if (n < 0) break
+
+                if (n < 0) {
+                    break
+                }
+
                 out.write(buffer, 0, n)
                 digest.update(buffer, 0, n)
                 read += n
@@ -221,18 +251,25 @@ class ApkInstaller(private val context: Context, private val client: OkHttpClien
         return digest.digest().joinToString("") { HEX_BYTE_FORMAT.format(it) }
     }
 
-    /** Streams [version] (or the local [source] APK) into a new install session, verifies its sha256 and commits it. */
+    /**
+     * Streams [version] (or the local [source] APK) into a new install session, verifies its sha256 and commits it.
+     */
     private suspend fun downloadAndCommit(target: Session, version: AppVersion, download: Download, source: File?) {
         val packageName = target.packageName
         val installer = context.packageManager.packageInstaller
+
         val params = PackageInstaller.SessionParams(PackageInstaller.SessionParams.MODE_FULL_INSTALL).apply {
             setAppPackageName(packageName)
             version.sizeBytes?.let(::setSize)
-            // Lets updates of apps EDroid installed itself skip the dialog.
-            if (Build.VERSION.SDK_INT >= 31) setRequireUserAction(PackageInstaller.SessionParams.USER_ACTION_NOT_REQUIRED)
+
+            if (Build.VERSION.SDK_INT >= 31) {
+                setRequireUserAction(PackageInstaller.SessionParams.USER_ACTION_NOT_REQUIRED)
+            }
         }
+
         val sessionId = installer.createSession(params)
         val session = installer.openSession(sessionId)
+
         try {
             val local = source?.takeIf { it.exists() }
             val hash = if (local != null) {
@@ -243,12 +280,19 @@ class ApkInstaller(private val context: Context, private val client: OkHttpClien
                 download.call = call
                 currentCoroutineContext().ensureActive()
                 call.execute().use { response ->
-                    if (!response.isSuccessful) throw IOException("Download failed (HTTP ${response.code})")
+                    if (!response.isSuccessful) {
+                        throw IOException("Download failed (HTTP ${response.code})")
+                    }
+
                     val body = response.body
                     writeApk(session, body.byteStream(), body.contentLength().takeIf { it > 0 } ?: version.sizeBytes, download)
                 }
             }
-            if (!hash.equals(version.sha256, ignoreCase = true)) throw IOException("Checksum mismatch, download rejected")
+
+            if (!hash.equals(version.sha256, ignoreCase = true)) {
+                throw IOException("Checksum mismatch, download rejected")
+            }
+
             currentCoroutineContext().ensureActive()
             set(packageName, InstallState.Installing)
             sessions[sessionId] = target
@@ -266,7 +310,9 @@ class ApkInstaller(private val context: Context, private val client: OkHttpClien
         }
     }
 
-    /** Called by [InstallResultReceiver] for every status the system reports on a session. */
+    /**
+     * Called by [InstallResultReceiver] for every status the system reports on a session.
+     */
     internal fun onSessionResult(intent: Intent) {
         val sessionId = intent.getIntExtra(PackageInstaller.EXTRA_SESSION_ID, -1)
         val target = sessions[sessionId] ?: return
@@ -274,21 +320,28 @@ class ApkInstaller(private val context: Context, private val client: OkHttpClien
         if (status == PackageInstaller.STATUS_PENDING_USER_ACTION) {
             val confirm = IntentCompat.getParcelableExtra(intent, Intent.EXTRA_INTENT, Intent::class.java)
                 ?.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+
             when {
                 confirm == null -> finish(sessionId, InstallState.Failed("Installer gave no confirmation screen"))
+
                 processLifecycle.currentState.isAtLeast(Lifecycle.State.STARTED) -> confirm(sessionId, confirm)
+
                 else -> {
                     pendingConfirms[sessionId] = confirm
                     notifyConfirm(sessionId, target.appName, confirm)
                 }
             }
+
             return
         }
+
         finish(
             sessionId,
             when (status) {
                 PackageInstaller.STATUS_SUCCESS -> InstallState.Idle
+
                 PackageInstaller.STATUS_FAILURE_ABORTED -> InstallState.Idle
+
                 else -> InstallState.Failed(
                     intent.getStringExtra(PackageInstaller.EXTRA_STATUS_MESSAGE) ?: "Install failed ($status)",
                 )
@@ -296,13 +349,17 @@ class ApkInstaller(private val context: Context, private val client: OkHttpClien
         )
     }
 
-    /** Opens the system install dialog for [sessionId] and drops its "ready to install" notification. */
+    /**
+     * Opens the system install dialog for [sessionId] and drops its "ready to install" notification.
+     */
     private fun confirm(sessionId: Int, confirm: Intent) {
         NotificationManagerCompat.from(context).cancel(sessionId)
         context.startActivity(confirm)
     }
 
-    /** Ends [sessionId]'s tracking, clears its notification and publishes [state] for its package. */
+    /**
+     * Ends [sessionId]'s tracking, clears its notification and publishes [state] for its package.
+     */
     private fun finish(sessionId: Int, state: InstallState) {
         val target = sessions.remove(sessionId) ?: return
         pendingConfirms.remove(sessionId)
@@ -310,17 +367,23 @@ class ApkInstaller(private val context: Context, private val client: OkHttpClien
         set(target.packageName, state)
     }
 
-    /** Whether notifications may be posted; below Android 13 the permission is implicit. */
+    /**
+     * Whether notifications may be posted; below Android 13 the permission is implicit.
+     */
     private fun canNotify() = Build.VERSION.SDK_INT < 33 ||
         ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED
 
-    /** Publishes [progress] both as install state and as the download notification. */
+    /**
+     * Publishes [progress] both as install state and as the download notification.
+     */
     private fun setDownloading(download: Download, progress: Float?) {
         set(download.target.packageName, InstallState.Downloading(progress))
         notifyProgress(download, progress)
     }
 
-    /** Ongoing progress notification with a Cancel action; tapping it opens EDroid. Only built, not posted, without permission. */
+    /**
+     * Ongoing progress notification with a Cancel action; tapping it opens EDroid. Only built, not posted, without permission.
+     */
     @SuppressLint("MissingPermission") // Checked by canNotify().
     private fun notifyProgress(download: Download, progress: Float?) {
         val target = download.target
@@ -351,14 +414,20 @@ class ApkInstaller(private val context: Context, private val client: OkHttpClien
         }
     }
 
-    /** "Ready to install" notification whose tap opens the system dialog. Silently skipped without permission. */
+    /**
+     * "Ready to install" notification whose tap opens the system dialog. Silently skipped without permission.
+     */
     @SuppressLint("MissingPermission") // Checked by canNotify().
     private fun notifyConfirm(sessionId: Int, appName: String, confirm: Intent) {
-        if (!canNotify()) return
+        if (!canNotify()) {
+            return
+        }
+
         val manager = NotificationManagerCompat.from(context)
         val tap = PendingIntent.getActivity(
             context, sessionId, confirm, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )
+
         val notification = NotificationCompat.Builder(context, CHANNEL_ID)
             .setSmallIcon(android.R.drawable.stat_sys_download_done)
             .setContentTitle(context.getString(R.string.notification_install_ready_title, appName))
@@ -367,9 +436,12 @@ class ApkInstaller(private val context: Context, private val client: OkHttpClien
             .setAutoCancel(true)
             .setCategory(NotificationCompat.CATEGORY_STATUS)
             .build()
+
         manager.notify(sessionId, notification)
     }
 
-    /** Replaces [packageName]'s install state. */
+    /**
+     * Replaces [packageName]'s install state.
+     */
     private fun set(packageName: String, state: InstallState) = _states.update { it + (packageName to state) }
 }

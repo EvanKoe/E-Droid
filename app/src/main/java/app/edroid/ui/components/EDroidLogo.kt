@@ -22,6 +22,18 @@ private const val VIEWPORT_HEIGHT = 575f
 private const val ORIGIN_X = 160f
 private const val ORIGIN_Y = 150f
 
+/** The vector's default size is the viewport divided by this, in dp. */
+private const val DEFAULT_SIZE_DIVISOR = 4
+
+/** Stroke width of the accent wave and its tick, in viewport units. */
+private const val ACCENT_STROKE_WIDTH = 13f
+
+/** Miter limit of the wave's stroke. */
+private const val WAVE_STROKE_MITER = 10f
+
+/** Short vertical tick under the E, in the same units as the paths below. */
+private const val TICK_PATH = "M546.5 662.5V717.5"
+
 /**
  * The "Expressive DROID" wordmark. The serif letters take [ink] and the purple accents ('xpressive',
  * the badge standing in for the O and the wave under the E) take [accent], so the logo follows the
@@ -33,7 +45,9 @@ fun EDroidLogo(
     ink: Color = MaterialTheme.colorScheme.onSurface,
     accent: Color = MaterialTheme.colorScheme.primary,
 ) {
+    // Wordmark image
     val logo = remember(ink, accent) { logoVector(ink, accent) }
+
     Image(
         imageVector = logo,
         contentDescription = stringResource(R.string.app_name),
@@ -41,13 +55,16 @@ fun EDroidLogo(
     )
 }
 
+/**
+ * Builds the wordmark as a vector, filling the letters with [ink] and the accents with [accent].
+ */
 private fun logoVector(ink: Color, accent: Color): ImageVector {
     val inkFill = SolidColor(ink)
     val accentFill = SolidColor(accent)
     return ImageVector.Builder(
         name = "EDroidLogo",
-        defaultWidth = VIEWPORT_WIDTH.dp / 4,
-        defaultHeight = VIEWPORT_HEIGHT.dp / 4,
+        defaultWidth = VIEWPORT_WIDTH.dp / DEFAULT_SIZE_DIVISOR,
+        defaultHeight = VIEWPORT_HEIGHT.dp / DEFAULT_SIZE_DIVISOR,
         viewportWidth = VIEWPORT_WIDTH,
         viewportHeight = VIEWPORT_HEIGHT,
     ).apply {
@@ -59,15 +76,15 @@ private fun logoVector(ink: Color, accent: Color): ImageVector {
         addPath(
             addPathNodes(WAVE_PATH),
             stroke = accentFill,
-            strokeLineWidth = 13f,
+            strokeLineWidth = ACCENT_STROKE_WIDTH,
             strokeLineCap = StrokeCap.Round,
             strokeLineJoin = StrokeJoin.Round,
-            strokeLineMiter = 10f,
+            strokeLineMiter = WAVE_STROKE_MITER,
         )
         addPath(
-            addPathNodes("M546.5 662.5V717.5"),
+            addPathNodes(TICK_PATH),
             stroke = accentFill,
-            strokeLineWidth = 13f,
+            strokeLineWidth = ACCENT_STROKE_WIDTH,
             strokeLineCap = StrokeCap.Round,
         )
         clearGroup()

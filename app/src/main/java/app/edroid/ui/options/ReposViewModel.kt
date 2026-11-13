@@ -36,6 +36,7 @@ data class UiText(@param:StringRes val res: Int, val arg: String? = null)
 /** A repo that answered and was signed by [fingerprint], waiting for the user to trust that key. */
 data class PendingTrust(val address: String, val fingerprint: String)
 
+/** Immutable state of the add-repository sheet. */
 data class AddRepoUiState(
     val address: String = "",
     val fingerprint: String = "",
@@ -47,12 +48,14 @@ data class AddRepoUiState(
     val added: Boolean = false,
 )
 
+/** Drives the repos page: the live repo rows and the add-repository form. */
 @OptIn(ExperimentalCoroutinesApi::class)
 class ReposViewModel(
     private val store: RepoStore,
     private val hub: RepoHub,
 ) : ViewModel() {
 
+    /** One row per saved repo, combining its sync state and app count. */
     val rows: StateFlow<List<RepoRow>> = store.repos
         .flatMapLatest { repos ->
             if (repos.isEmpty()) {
@@ -66,23 +69,34 @@ class ReposViewModel(
                 ) { it.toList() }
             }
         }
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MS), emptyList())
 
     private val _addState = MutableStateFlow(AddRepoUiState())
+    /** State of the add-repository form. */
     val addState: StateFlow<AddRepoUiState> = _addState.asStateFlow()
     private var verifyJob: Job? = null
 
+    /**
+     * Turns [repo] on or off.
+     */
     fun setEnabled(repo: Repository, enabled: Boolean) = hub.setEnabled(repo.id, enabled)
 
+    /**
+     * Removes [repo] from the saved list.
+     */
     fun remove(repo: Repository) = hub.remove(repo)
 
-    /** Clears the add form; called each time the sheet opens. */
+    /**
+     * Clears the add form; called each time the sheet opens.
+     */
     fun startAdding() {
         verifyJob?.cancel()
         _addState.value = AddRepoUiState()
     }
 
-    /** A pasted share link (`…/repo?fingerprint=…`) fills in both fields. */
+    /**
+     * A pasted share link (`…/repo?fingerprint=…`) fills in both fields.
+     */
     fun onAddressChange(value: String) {
         val (address, fingerprint) = splitShareLink(value)
         _addState.update {
@@ -96,6 +110,9 @@ class ReposViewModel(
         }
     }
 
+    /**
+     * Updates the fingerprint field and clears its error.
+     */
     fun onFingerprintChange(value: String) =
         _addState.update { it.copy(fingerprint = value, fingerprintError = null, pendingTrust = null) }
 
@@ -105,7 +122,10 @@ class ReposViewModel(
      */
     fun submit() {
         val form = _addState.value
-        if (form.verifying) return
+        if (form.verifying) {
+            return
+        }
+
         val address = Repository.normalizeAddress(form.address)
         val fingerprint = Repository.normalizeFingerprint(form.fingerprint)
         val host = runCatching { URI(address).host }.getOrNull()
@@ -119,6 +139,7 @@ class ReposViewModel(
         } else {
             null
         }
+
         if (addressError != null || fingerprintError != null) {
             _addState.update { it.copy(addressError = addressError, fingerprintError = fingerprintError) }
             return
@@ -130,9 +151,11 @@ class ReposViewModel(
                 val signer = hub.probe(address).fingerprint.uppercase()
                 when {
                     fingerprint.isEmpty() -> _addState.update { it.copy(pendingTrust = PendingTrust(address, signer)) }
+
                     signer != fingerprint -> _addState.update {
                         it.copy(fingerprintError = UiText(R.string.add_repo_error_mismatch, signer))
                     }
+
                     else -> save(address, signer)
                 }
             } catch (e: CancellationException) {
@@ -147,18 +170,27 @@ class ReposViewModel(
         }
     }
 
-    /** The user checked the key shown for an unpinned address and accepts it. */
+    /**
+     * The user checked the key shown for an unpinned address and accepts it.
+     */
     fun trust() {
         val pending = _addState.value.pendingTrust ?: return
         save(pending.address, pending.fingerprint)
     }
 
+    /**
+     * Persists the verified repo and flags the form as finished.
+     */
     private fun save(address: String, fingerprint: String) {
         hub.add(Repository(address = address, name = defaultName(address), fingerprint = fingerprint))
         _addState.update { it.copy(added = true) }
     }
 
     companion object {
+        /** How long state flows stay hot after the last subscriber leaves. */
+        private const val STOP_TIMEOUT_MS = 5_000L
+
+        /** Builds the ViewModel from the app container. */
         val Factory: ViewModelProvider.Factory = viewModelFactory {
             initializer {
                 val app = this[ViewModelProvider.AndroidViewModelFactory.APPLICATION_KEY] as EDroidApp
@@ -175,9 +207,15 @@ class ReposViewModel(
 private fun splitShareLink(raw: String): Pair<String, String?> {
     val trimmed = raw.trim()
     val isShareScheme = trimmed.startsWith("fdroidrepos://", ignoreCase = true)
-    if (!isShareScheme && '?' !in trimmed) return raw to null
+    if (!isShareScheme && '?' !in trimmed) {
+        return raw to null
+    }
+
     val uri = runCatching { URI(trimmed) }.getOrNull() ?: return raw to null
-    if (uri.rawAuthority == null) return raw to null
+    if (uri.rawAuthority == null) {
+        return raw to null
+    }
+
     val fingerprint = uri.rawQuery
         ?.split('&')
         ?.map { it.split('=', limit = 2) }
@@ -187,5 +225,7 @@ private fun splitShareLink(raw: String): Pair<String, String?> {
     return "$scheme://${uri.rawAuthority}${uri.rawPath.orEmpty()}" to fingerprint
 }
 
-/** A readable placeholder name (`host/path`) until the repo's own index names it. */
+/**
+ * A readable placeholder name (`host/path`) until the repo's own index names it.
+ */
 private fun defaultName(address: String): String = address.substringAfter("://")

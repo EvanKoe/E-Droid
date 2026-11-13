@@ -7,7 +7,9 @@ import java.io.File
 /** Package identity and version read from an APK file's manifest. */
 data class ApkInfo(val packageName: String, val appName: String, val versionCode: Long, val versionName: String)
 
-/** Manifest facts of an APK on disk, or null when it cannot be parsed. */
+/**
+ * Manifest facts of an APK on disk, or null when it cannot be parsed.
+ */
 fun Context.readApkInfo(file: File): ApkInfo? {
     val info = packageManager.getPackageArchiveInfo(file.path, 0) ?: return null
     val app = info.applicationInfo
