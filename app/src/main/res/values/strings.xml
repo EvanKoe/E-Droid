@@ -23,6 +23,9 @@
     <string name="git_update_all">Update all</string>
     <string name="git_up_to_date">Up to date</string>
     <string name="action_delete">Delete</string>
+    <string name="git_open_github">Open on GitHub</string>
+    <string name="git_swipe_hint">Swipe right to remove, left to open on GitHub</string>
+    <string name="git_remove_confirm">Stop following %1$s? The app you installed from it stays installed.</string>
     <string name="git_choose_apk">Which APK?</string>
     <string name="git_choose_apk_intro">This release has several APK files. Pick the one that fits your device.</string>
     <string name="git_choose_needed">Pick an APK file to continue</string>

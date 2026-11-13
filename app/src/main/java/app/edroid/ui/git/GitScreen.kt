@@ -1,6 +1,8 @@
 package app.edroid.ui.git
 
 import android.content.Context
+import android.content.Intent
+import android.util.Log
 import android.text.format.Formatter
 import android.widget.Toast
 import androidx.annotation.StringRes
@@ -24,6 +26,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.rounded.OpenInNew
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.Delete
 import androidx.compose.material.icons.rounded.Download
@@ -67,18 +70,22 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.core.net.toUri
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import app.edroid.R
 import app.edroid.data.github.GitHubAsset
+import app.edroid.data.github.GitHubRepo
 import app.edroid.ui.components.ActionGap
 import app.edroid.ui.components.AppInstallActions
 import app.edroid.ui.components.GitIcon
 import app.edroid.ui.components.InstallActions
 import app.edroid.ui.components.PageTitle
 import app.edroid.ui.components.SwipeAction
+import app.edroid.ui.components.SwipeSide
 import app.edroid.ui.components.appInstallActions
 import app.edroid.ui.options.UiText
 import app.edroid.ui.search.SearchField
@@ -87,11 +94,14 @@ import app.edroid.ui.theme.Layering
 import app.edroid.ui.theme.groupedShapeAt
 import coil3.compose.AsyncImage
 
+/** Log tag. */
+private const val TAG = "GitScreen"
+
 /** Room the list keeps at its end so the last card clears the Add button floating over it. */
 private val AddButtonClearance = 72.dp
 
-/** Owner avatar URL prefix; the owner and [AVATAR_URL_SUFFIX] complete it. */
-private const val AVATAR_URL_PREFIX = "https://github.com/"
+/** GitHub base URL: `owner/name` completes a repo page, the owner and [AVATAR_URL_SUFFIX] an avatar. */
+private const val GITHUB_URL_PREFIX = "https://github.com/"
 
 /** Avatar size query, in pixels, requested from GitHub. */
 private const val AVATAR_URL_SUFFIX = ".png?size=120"
@@ -128,6 +138,13 @@ fun GitScreen(
 
     var adding by rememberSaveable { mutableStateOf(false) }
     var query by rememberSaveable { mutableStateOf("") }
+    var removingKey by rememberSaveable { mutableStateOf<String?>(null) }
+
+    val openRepoPage = { repo: GitHubRepo ->
+        runCatching {
+            context.startActivity(Intent(Intent.ACTION_VIEW, (GITHUB_URL_PREFIX + repo).toUri()).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+        }.onFailure { e -> Log.w(TAG, "Could not open $repo", e) }
+    }
 
     val shown = remember(rows, query) {
         val q = query.trim()
@@ -190,14 +207,34 @@ fun GitScreen(
                 key(row.tracked.key) {
                     SwipeAction(
                         shape = shape,
-                        icon = Icons.Rounded.RemoveCircleOutline,
-                        label = R.string.action_remove,
-                        onAction = { viewModel.remove(row.tracked.repo) },
-                        containerColor = MaterialTheme.colorScheme.errorContainer,
+                        start = SwipeSide(
+                            icon = Icons.Rounded.RemoveCircleOutline,
+                            label = R.string.action_remove,
+                            containerColor = MaterialTheme.colorScheme.errorContainer,
+                            settlesBack = true,
+                            onAction = { removingKey = row.tracked.key },
+                        ),
+                        end = SwipeSide(
+                            icon = Icons.AutoMirrored.Rounded.OpenInNew,
+                            label = R.string.git_open_github,
+                            settlesBack = true,
+                            onAction = { openRepoPage(row.tracked.repo) },
+                        ),
                     ) {
                         GitRepoCard(row, shape, viewModel)
                     }
                 }
+            }
+
+            // Swipe hint
+            if (shown.isNotEmpty()) {
+                Text(
+                    stringResource(R.string.git_swipe_hint),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
+                )
             }
 
             Spacer(Modifier.height(AddButtonClearance))
@@ -237,6 +274,18 @@ fun GitScreen(
         AddGitRepoDialog(onAdd = viewModel::add, onDismiss = { adding = false })
     }
 
+    // Remove repo dialog
+    rows.firstOrNull { it.tracked.key == removingKey }?.let { row ->
+        RemoveRepoDialog(
+            repoName = row.tracked.repo.toString(),
+            onConfirm = {
+                viewModel.remove(row.tracked.repo)
+                removingKey = null
+            },
+            onDismiss = { removingKey = null },
+        )
+    }
+
     // APK chooser dialog
     rows.firstOrNull { it.state is TrackState.Choosing }?.let { row ->
         ChooseApkDialog(
@@ -245,6 +294,34 @@ fun GitScreen(
             onDismiss = { viewModel.dismissChoice(row.tracked.repo) },
         )
     }
+}
+
+/**
+ * Asks before a repo is dropped from the list, reminding that the installed app stays.
+ */
+@Composable
+private fun RemoveRepoDialog(repoName: String, onConfirm: () -> Unit, onDismiss: () -> Unit) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(stringResource(R.string.repos_remove)) },
+        text = { Text(stringResource(R.string.git_remove_confirm, repoName)) },
+        // Remove button
+        confirmButton = {
+            Button(
+                onClick = onConfirm,
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = MaterialTheme.colorScheme.error,
+                    contentColor = MaterialTheme.colorScheme.onError,
+                ),
+            ) {
+                Text(stringResource(R.string.action_remove))
+            }
+        },
+        // Cancel button
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text(stringResource(R.string.action_cancel)) }
+        },
+    )
 }
 
 /**
@@ -290,7 +367,7 @@ private fun GitRepoCard(row: GitRow, shape: Shape, viewModel: GitViewModel) {
                             modifier = Modifier.padding(8.dp),
                         )
                         AsyncImage(
-                            model = AVATAR_URL_PREFIX + tracked.repo.owner + AVATAR_URL_SUFFIX,
+                            model = GITHUB_URL_PREFIX + tracked.repo.owner + AVATAR_URL_SUFFIX,
                             contentDescription = null,
                             contentScale = ContentScale.Crop,
                             modifier = Modifier.fillMaxSize(),

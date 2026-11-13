@@ -69,6 +69,7 @@ import app.edroid.ui.components.InstallActions
 import app.edroid.ui.components.PageTitle
 import app.edroid.ui.components.appInstallActions
 import app.edroid.ui.components.SwipeAction
+import app.edroid.ui.components.SwipeSide
 import app.edroid.ui.components.bouncySpring
 import app.edroid.ui.theme.GroupedItemSpacing
 import app.edroid.ui.theme.Layering
@@ -190,9 +191,11 @@ fun UpdatesScreen(
 
                         SwipeAction(
                             shape = shape,
-                            icon = Icons.Rounded.VisibilityOff,
-                            label = R.string.updates_hide,
-                            onAction = { viewModel.setHidden(update.app.packageName, true) },
+                            end = SwipeSide(
+                                icon = Icons.Rounded.VisibilityOff,
+                                label = R.string.updates_hide,
+                                onAction = { viewModel.setHidden(update.app.packageName, true) },
+                            ),
                             modifier = animateListItem(),
                         ) {
                             UpdateCard(
