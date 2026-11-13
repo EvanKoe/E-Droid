@@ -65,7 +65,9 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.input.ImeAction
@@ -127,6 +129,7 @@ fun GitScreen(
     viewModel: GitViewModel = viewModel(factory = GitViewModel.Factory),
 ) {
     val context = LocalContext.current
+    val haptics = LocalHapticFeedback.current
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val rows = state.rows
     val refreshing = state.refreshing
@@ -212,13 +215,19 @@ fun GitScreen(
                             label = R.string.action_remove,
                             containerColor = MaterialTheme.colorScheme.errorContainer,
                             settlesBack = true,
-                            onAction = { removingKey = row.tracked.key },
+                            onAction = {
+                                haptics.performHapticFeedback(HapticFeedbackType.VirtualKey)
+                                removingKey = row.tracked.key
+                            },
                         ),
                         end = SwipeSide(
                             icon = Icons.AutoMirrored.Rounded.OpenInNew,
                             label = R.string.git_open_github,
                             settlesBack = true,
-                            onAction = { openRepoPage(row.tracked.repo) },
+                            onAction = {
+                                haptics.performHapticFeedback(HapticFeedbackType.VirtualKey)
+                                openRepoPage(row.tracked.repo)
+                            },
                         ),
                     ) {
                         GitRepoCard(row, shape, viewModel)
@@ -279,6 +288,7 @@ fun GitScreen(
         RemoveRepoDialog(
             repoName = row.tracked.repo.toString(),
             onConfirm = {
+                haptics.performHapticFeedback(HapticFeedbackType.VirtualKey)
                 viewModel.remove(row.tracked.repo)
                 removingKey = null
             },
