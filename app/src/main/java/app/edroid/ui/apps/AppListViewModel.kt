@@ -34,6 +34,7 @@ enum class AppSort(@param:StringRes val labelRes: Int) {
     Name(R.string.sort_name),
 }
 
+/** Immutable snapshot of everything the app list screen renders. */
 data class AppListUiState(
     val sync: SyncState = SyncState.Idle,
     /** The "random app you may like" spotlight; null until an index is loaded. */
@@ -44,6 +45,7 @@ data class AppListUiState(
     /** Null until an index (cached or fresh) has been parsed. */
     val repo: RepoInfo? = null,
 ) {
+    /** True once an index (cached or fresh) has been parsed. */
     val hasData: Boolean get() = repo != null
 }
 
@@ -55,6 +57,7 @@ private data class HomeContent(
     val repo: RepoInfo?,
 )
 
+/** Holds the app list screen state: the index, the spotlight pick, the sort order and refreshes. */
 class AppListViewModel(private val repository: RepoHub) : ViewModel() {
 
     // Seeds the spotlight pick so it stays put across index refreshes and recompositions, and only
@@ -76,6 +79,7 @@ class AppListViewModel(private val repository: RepoHub) : ViewModel() {
         )
     }.flowOn(Dispatchers.Default)
 
+    /** Single state stream the screen collects. */
     val uiState: StateFlow<AppListUiState> =
         combine(content, repository.sync) { content, sync ->
             AppListUiState(
@@ -85,33 +89,50 @@ class AppListViewModel(private val repository: RepoHub) : ViewModel() {
                 sort = content.sort,
                 repo = content.repo,
             )
-        }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), AppListUiState())
+        }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MS), AppListUiState())
 
     init {
         refresh()
     }
 
+    /**
+     * Re-syncs the index unless a refresh is already running; [force] bypasses the freshness check.
+     */
     fun refresh(force: Boolean = false) {
-        if (refreshJob?.isActive == true) return
+        if (refreshJob?.isActive == true) {
+            return
+        }
+
         refreshJob = viewModelScope.launch { repository.refresh(force) }
     }
 
-    /** Pull-to-refresh: re-syncs the index and draws a new spotlight app. */
+    /**
+     * Pull-to-refresh: re-syncs the index and draws a new spotlight app.
+     */
     fun refreshAndShuffle() {
         featuredSeed.value = Random.nextLong()
         refresh()
     }
 
-    /** Draws a new spotlight app without re-syncing. */
+    /**
+     * Draws a new spotlight app without re-syncing.
+     */
     fun shuffleFeatured() {
         featuredSeed.value = Random.nextLong()
     }
 
+    /**
+     * Applies the sort order picked by the user.
+     */
     fun onSortSelected(order: AppSort) {
         sort.value = order
     }
 
     companion object {
+        /** How long state flows stay hot after the last subscriber leaves. */
+        private const val STOP_TIMEOUT_MS = 5_000L
+
+        /** Builds the ViewModel from the application's container. */
         val Factory: ViewModelProvider.Factory = viewModelFactory {
             initializer {
                 val app = this[ViewModelProvider.AndroidViewModelFactory.APPLICATION_KEY] as EDroidApp
@@ -121,15 +142,22 @@ class AppListViewModel(private val repository: RepoHub) : ViewModel() {
     }
 }
 
-/** A random app worth showing off: one with an icon and a summary when the index has any. */
+/**
+ * A random app worth showing off: one with an icon and a summary when the index has any.
+ */
 private fun pickFeatured(apps: List<App>, seed: Long): App? {
     val presentable = apps.filter { it.iconUrl != null && !it.summary.isNullOrBlank() }
     return presentable.ifEmpty { apps }.randomOrNull(Random(seed))
 }
 
+/**
+ * Comparator that orders apps according to this sort.
+ */
 private fun AppSort.comparator(): Comparator<App> = when (this) {
     AppSort.Newest -> compareByDescending { it.added }
+
     AppSort.Updated -> compareByDescending { it.lastUpdated }
+
     AppSort.Name -> {
         val collator = Collator.getInstance().apply { strength = Collator.PRIMARY }
         // Leading tags and brackets ("[ROOT] Night Light", "< polycule >") would otherwise

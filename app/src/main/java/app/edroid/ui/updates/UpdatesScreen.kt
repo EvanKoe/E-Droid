@@ -5,7 +5,6 @@ import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -34,14 +33,11 @@ import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
-import androidx.compose.material3.SwipeToDismissBox
-import androidx.compose.material3.SwipeToDismissBoxValue
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.material3.pulltorefresh.PullToRefreshDefaults
 import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
-import androidx.compose.material3.rememberSwipeToDismissBoxState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -72,15 +68,28 @@ import app.edroid.ui.components.CancelWidth
 import app.edroid.ui.components.InstallActions
 import app.edroid.ui.components.PageTitle
 import app.edroid.ui.components.appInstallActions
+import app.edroid.ui.components.SwipeAction
+import app.edroid.ui.components.SwipeSide
 import app.edroid.ui.components.bouncySpring
 import app.edroid.ui.theme.GroupedItemSpacing
 import app.edroid.ui.theme.Layering
 import app.edroid.ui.theme.groupedShapeAt
 import coil3.compose.AsyncImage
 
+/** Height of the compact Update, Unhide and Cancel buttons on a row. */
 private val UpdateButtonHeight = 40.dp
+
 /** Update's width at rest; the same as Cancel's, so only the progress bar moves in when it starts. */
 private val UpdateButtonWidth = CancelWidth
+
+/** Rotation, in degrees, of the hidden-toggle chevron while the hidden rows are shown. */
+private const val CHEVRON_EXPANDED_DEGREES = 180f
+
+/** Scale of the hidden toggle while expanded. */
+private const val TOGGLE_EXPANDED_SCALE = 1.08f
+
+/** Separator between the installed and the latest version on a row. */
+private const val VERSION_ARROW = "  →  "
 
 /**
  * Updates tab: every installed app an enabled repository has a newer version of, each with its
@@ -106,10 +115,16 @@ fun UpdatesScreen(
     // Same as Home: only a pull-initiated refresh drives the indicator.
     var pullRefreshing by remember { mutableStateOf(false) }
     val syncing = state.sync is SyncState.Loading
-    LaunchedEffect(syncing) { if (!syncing) pullRefreshing = false }
-    var showHidden by rememberSaveable { mutableStateOf(false) }
 
+    LaunchedEffect(syncing) {
+        if (!syncing) {
+            pullRefreshing = false
+        }
+    }
+
+    var showHidden by rememberSaveable { mutableStateOf(false) }
     val pullState = rememberPullToRefreshState()
+
     PullToRefreshBox(
         isRefreshing = pullRefreshing,
         onRefresh = {
@@ -132,8 +147,13 @@ fun UpdatesScreen(
         val hidden = state.hidden
         val hiddenExpanded = showHidden && hidden.isNotEmpty()
         val layout = LocalLayoutDirection.current
+
         Column(Modifier.fillMaxSize()) {
+
+            // List and empty state
             Box(Modifier.weight(1f)) {
+
+                // Update list
                 LazyColumn(
                     modifier = Modifier.fillMaxSize(),
                     // The toggle below takes the bottom inset, so the list stops just above it.
@@ -144,9 +164,12 @@ fun UpdatesScreen(
                     ),
                     verticalArrangement = Arrangement.spacedBy(GroupedItemSpacing),
                 ) {
+
+                    // Title and count
                     item(key = "title") {
                         Column {
                             PageTitle(text = stringResource(R.string.updates_title))
+
                             if (!updates.isNullOrEmpty()) {
                                 Text(
                                     pluralStringResource(R.plurals.updates_count, updates.size, updates.size),
@@ -155,15 +178,24 @@ fun UpdatesScreen(
                                     modifier = Modifier.padding(horizontal = 12.dp),
                                 )
                             }
+
                             Spacer(Modifier.height(8.dp))
                         }
                     }
+
+                    // Update rows
                     val visible = updates.orEmpty()
+
                     itemsIndexed(visible, key = { _, update -> update.app.packageName }) { index, update ->
                         val shape = groupedShapeAt(index, visible.size)
-                        SwipeToHide(
+
+                        SwipeAction(
                             shape = shape,
-                            onHide = { viewModel.setHidden(update.app.packageName, true) },
+                            end = SwipeSide(
+                                icon = Icons.Rounded.VisibilityOff,
+                                label = R.string.updates_hide,
+                                onAction = { viewModel.setHidden(update.app.packageName, true) },
+                            ),
                             modifier = animateListItem(),
                         ) {
                             UpdateCard(
@@ -174,9 +206,13 @@ fun UpdatesScreen(
                             )
                         }
                     }
+
+                    // Hidden rows
                     if (hiddenExpanded) {
+                        // Gap above the hidden rows
                         item(key = "hidden-gap") { Spacer(animateListItem().height(12.dp)) }
-                        // Keyed apart from the visible rows so a swiped row fades out and its hidden twin fades in.
+
+                        // Hidden rows, keyed apart from the visible ones so a swiped row fades out and its hidden twin fades in.
                         itemsIndexed(hidden, key = { _, update -> "hidden:" + update.app.packageName }) { index, update ->
                             UpdateCard(
                                 update,
@@ -189,7 +225,8 @@ fun UpdatesScreen(
                         }
                     }
                 }
-                // Sits over the list rather than in it so it centres on the screen; it takes no touches.
+
+                // Empty state; sits over the list rather than in it so it centres on the screen; it takes no touches.
                 // Qualified: inside Column the ColumnScope overload shadows this one and cannot be used here.
                 androidx.compose.animation.AnimatedVisibility(
                     visible = updates.isNullOrEmpty() && !hiddenExpanded,
@@ -200,6 +237,8 @@ fun UpdatesScreen(
                     EmptyState(loading = updates == null)
                 }
             }
+
+            // Hidden rows toggle
             if (hidden.isNotEmpty()) {
                 HiddenToggle(
                     count = hidden.size,
@@ -214,7 +253,9 @@ fun UpdatesScreen(
     }
 }
 
-/** Check mark and "All your apps are up to date", or the waiting text while the index loads. */
+/**
+ * Check mark and "All your apps are up to date", or the waiting text while the index loads.
+ */
 @Composable
 private fun EmptyState(loading: Boolean) {
     Column(
@@ -222,6 +263,8 @@ private fun EmptyState(loading: Boolean) {
         verticalArrangement = Arrangement.spacedBy(32.dp),
         modifier = Modifier.padding(horizontal = 32.dp),
     ) {
+
+        // Check mark
         if (!loading) {
             Icon(
                 Icons.Outlined.CheckCircle,
@@ -230,6 +273,8 @@ private fun EmptyState(loading: Boolean) {
                 modifier = Modifier.size(96.dp),
             )
         }
+
+        // Status text
         Text(
             stringResource(if (loading) R.string.search_index_loading else R.string.updates_none),
             style = MaterialTheme.typography.bodyLarge,
@@ -239,44 +284,9 @@ private fun EmptyState(loading: Boolean) {
     }
 }
 
-/** Swiping the row towards the start uncovers a "Hide" backdrop and, once settled, hides the app. */
-@Composable
-private fun SwipeToHide(
-    shape: Shape,
-    onHide: () -> Unit,
-    modifier: Modifier = Modifier,
-    content: @Composable () -> Unit,
-) {
-    val dismissState = rememberSwipeToDismissBoxState()
-    SwipeToDismissBox(
-        state = dismissState,
-        modifier = modifier,
-        enableDismissFromStartToEnd = false,
-        onDismiss = { if (it == SwipeToDismissBoxValue.EndToStart) onHide() },
-        backgroundContent = {
-            Row(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .clip(shape)
-                    .background(MaterialTheme.colorScheme.secondaryContainer)
-                    .padding(horizontal = 20.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Icon(Icons.Rounded.VisibilityOff, contentDescription = null, tint = MaterialTheme.colorScheme.onSecondaryContainer)
-                Text(
-                    stringResource(R.string.updates_hide),
-                    style = MaterialTheme.typography.labelLarge,
-                    color = MaterialTheme.colorScheme.onSecondaryContainer,
-                )
-            }
-        },
-    ) {
-        content()
-    }
-}
-
-/** "N hidden updates" with a chevron, pinned under the list; tapping it shows the hidden rows at the list's end. */
+/**
+ * "N hidden updates" with a chevron, pinned under the list; tapping it shows the hidden rows at the list's end.
+ */
 @Composable
 private fun HiddenToggle(
     count: Int,
@@ -285,17 +295,22 @@ private fun HiddenToggle(
     modifier: Modifier = Modifier,
 ) {
     // Chevron flip and a slight grow ride the same overshooting spring as the row buttons.
-    val chevron by animateFloatAsState(if (expanded) 180f else 0f, bouncySpring(), label = "hiddenChevron")
-    val scale by animateFloatAsState(if (expanded) 1.08f else 1f, bouncySpring(), label = "hiddenScale")
+    val chevron by animateFloatAsState(if (expanded) CHEVRON_EXPANDED_DEGREES else 0f, bouncySpring(), label = "hiddenChevron")
+    val scale by animateFloatAsState(if (expanded) TOGGLE_EXPANDED_SCALE else 1f, bouncySpring(), label = "hiddenScale")
+
     // Expanded, the toggle fills in as a pill so it reads as the "on" state of the rows above it.
     val colors = MaterialTheme.colorScheme
     val motion = MaterialTheme.motionScheme
+
     val container by animateColorAsState(
         if (expanded) colors.primaryContainer else Color.Transparent, motion.defaultEffectsSpec(), label = "hiddenContainer",
     )
+
     val content by animateColorAsState(
         if (expanded) colors.primary else colors.onSurfaceVariant, motion.defaultEffectsSpec(), label = "hiddenContent",
     )
+
+    // Toggle button
     TextButton(
         onClick = onClick,
         shapes = ButtonDefaults.shapes(), // expressive press morph, same as the install buttons
@@ -310,7 +325,9 @@ private fun HiddenToggle(
             pluralStringResource(R.plurals.updates_hidden_count, count, count),
             style = MaterialTheme.typography.bodyLarge,
         )
+
         Spacer(Modifier.width(12.dp))
+
         Icon(Icons.Rounded.KeyboardArrowUp, contentDescription = null, modifier = Modifier.rotate(chevron))
     }
 }
@@ -332,6 +349,7 @@ private fun UpdateCard(
     onUnhide: (() -> Unit)? = null,
 ) {
     val app = update.app
+
     val actions = appInstallActions(
         packageName = app.packageName,
         appName = app.name,
@@ -340,12 +358,15 @@ private fun UpdateCard(
         allowUninstall = false,
         reportFailures = reportFailures,
     )
+
     val busy = onUnhide == null && actions.state.busy
+
     val textAlpha by animateFloatAsState(
         targetValue = if (busy) 0f else 1f,
         animationSpec = MaterialTheme.motionScheme.defaultEffectsSpec(),
         label = "updateText",
     )
+
     Card(
         onClick = onClick,
         modifier = modifier,
@@ -354,8 +375,11 @@ private fun UpdateCard(
     ) {
         Row(
             modifier = Modifier.padding(12.dp),
+            horizontalArrangement = Arrangement.spacedBy(16.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
+
+            // App icon
             Surface(
                 shape = MaterialTheme.shapes.medium,
                 color = Layering.page, // icon placeholder reads as an inset into the page
@@ -367,10 +391,13 @@ private fun UpdateCard(
                     modifier = Modifier.fillMaxSize().clip(MaterialTheme.shapes.medium),
                 )
             }
-            Spacer(Modifier.width(16.dp))
+
+            // Text and trailing button
             BoxWithConstraints(Modifier.weight(1f)) {
                 val slotTarget = if (busy) maxWidth else UpdateButtonWidth
                 val slot = animateDpAsState(slotTarget, bouncySpring(), label = "updateSlot").value.coerceIn(0.dp, maxWidth)
+
+                // Name and versions
                 Column(
                     Modifier
                         .align(Alignment.CenterStart)
@@ -383,16 +410,21 @@ private fun UpdateCard(
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                     )
+
                     Spacer(Modifier.height(4.dp))
+
                     Text(
-                        listOfNotNull(update.installedVersionName, app.latestVersionName).joinToString("  →  "),
+                        listOfNotNull(update.installedVersionName, app.latestVersionName).joinToString(VERSION_ARROW),
                         style = MaterialTheme.typography.labelMedium,
                         color = MaterialTheme.colorScheme.primary,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                     )
                 }
+
+                // Update or Unhide button
                 val trailing = Modifier.align(Alignment.CenterEnd).width(slot)
+
                 if (onUnhide != null) {
                     FilledTonalButton(
                         onClick = onUnhide,
@@ -410,7 +442,9 @@ private fun UpdateCard(
     }
 }
 
-/** Fades rows in and out (an installed update leaves the list) and slides the rest into place. */
+/**
+ * Fades rows in and out (an installed update leaves the list) and slides the rest into place.
+ */
 @Composable
 private fun LazyItemScope.animateListItem(): Modifier {
     val motion = MaterialTheme.motionScheme

@@ -22,11 +22,21 @@ data class Repository(
     /** Stable, filesystem-safe identifier derived from the address. */
     val id: String get() = address.lowercase().hashCode().toUInt().toString(16)
 
+    /**
+     * Absolute URL of [file], or null when there is no file.
+     */
     fun resolve(file: FileV2?): String? = file?.let { resolve(it.name) }
+    /**
+     * Absolute URL of the APK [file].
+     */
     fun resolve(file: FileV1): String = resolve(file.name)
+    /**
+     * Joins [path] (index paths start with `/`) onto [address] with exactly one slash between them.
+     */
     fun resolve(path: String): String = address.trimEnd('/') + "/" + path.trimStart('/')
 
     companion object {
+        /** The built-in F-Droid repository, present on first run. */
         val FDROID = Repository(
             address = "https://f-droid.org/repo",
             name = "F-Droid",
@@ -34,14 +44,22 @@ data class Repository(
             isDefault = true,
         )
 
+        /** A repo fingerprint: 64 upper-case hex digits. */
         private val FINGERPRINT_PATTERN = Regex("^[0-9A-F]{64}$")
 
-        /** Upper-cases [raw] and drops the spaces and colons fingerprints are often written with. */
+        /**
+         * Upper-cases [raw] and drops the spaces and colons fingerprints are often written with.
+         */
         fun normalizeFingerprint(raw: String): String = raw.filterNot { it.isWhitespace() || it == ':' }.uppercase()
 
+        /**
+         * Whether [fingerprint] is 64 upper-case hex digits, i.e. an already-normalized SHA-256.
+         */
         fun isValidFingerprint(fingerprint: String): Boolean = FINGERPRINT_PATTERN.matches(fingerprint)
 
-        /** Trims whitespace and trailing slashes, so `…/repo/` and `…/repo` map to the same [id]. */
+        /**
+         * Trims whitespace and trailing slashes, so `…/repo/` and `…/repo` map to the same [id].
+         */
         fun normalizeAddress(raw: String): String = raw.trim().trimEnd('/')
     }
 }

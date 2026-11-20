@@ -21,18 +21,30 @@ import java.math.BigDecimal
 class IndexV2StreamParser(
     private val json: Json = DEFAULT_JSON,
 ) {
+    /** Receives the parts of the index as [parse] walks it. */
     interface Visitor {
+        /**
+         * Called once with the decoded `repo` section.
+         */
         fun onRepo(repo: RepoV2)
+
+        /**
+         * Called for each package, in file order, as soon as it is decoded.
+         */
         fun onPackage(packageName: String, pkg: PackageV2)
     }
 
+    /**
+     * Walks [input] once, handing the repo section and every package to [visitor] without buffering the index.
+     */
     fun parse(input: InputStream, visitor: Visitor) {
         JsonReader(InputStreamReader(input, Charsets.UTF_8)).use { reader ->
             reader.beginObject()
             while (reader.hasNext()) {
                 when (reader.nextName()) {
-                    "repo" -> visitor.onRepo(json.decodeFromString(RepoV2.serializer(), reader.readSubtree()))
-                    "packages" -> {
+                    KEY_REPO -> visitor.onRepo(json.decodeFromString(RepoV2.serializer(), reader.readSubtree()))
+
+                    KEY_PACKAGES -> {
                         reader.beginObject()
                         while (reader.hasNext()) {
                             val name = reader.nextName()
@@ -41,6 +53,7 @@ class IndexV2StreamParser(
                         }
                         reader.endObject()
                     }
+
                     else -> reader.skipValue()
                 }
             }
@@ -57,16 +70,18 @@ class IndexV2StreamParser(
         JsonReader(InputStreamReader(input, Charsets.UTF_8)).use { reader ->
             reader.beginObject()
             while (reader.hasNext()) {
-                if (reader.nextName() != "packages") {
+                if (reader.nextName() != KEY_PACKAGES) {
                     reader.skipValue()
                     continue
                 }
+
                 reader.beginObject()
                 while (reader.hasNext()) {
                     checkCancelled()
                     if (reader.nextName() == packageName) {
                         return json.decodeFromString(PackageV2.serializer(), reader.readSubtree())
                     }
+
                     reader.skipValue()
                 }
                 return null
@@ -75,13 +90,18 @@ class IndexV2StreamParser(
         return null
     }
 
-    /** Copies the value at the reader's position into a JSON string. */
+    /**
+     * Copies the value at the reader's position into a JSON string.
+     */
     private fun JsonReader.readSubtree(): String {
         val out = StringWriter()
         JsonWriter(out).use { w -> copyValue(this, w) }
         return out.toString()
     }
 
+    /**
+     * Recursively copies the value at the position of [r] to [w], preserving numbers exactly.
+     */
     private fun copyValue(r: JsonReader, w: JsonWriter) {
         when (r.peek()) {
             JsonToken.BEGIN_OBJECT -> {
@@ -92,21 +112,34 @@ class IndexV2StreamParser(
                 }
                 r.endObject(); w.endObject()
             }
+
             JsonToken.BEGIN_ARRAY -> {
                 r.beginArray(); w.beginArray()
                 while (r.hasNext()) copyValue(r, w)
                 r.endArray(); w.endArray()
             }
+
             JsonToken.STRING -> w.value(r.nextString())
+
             // nextString() on a NUMBER token yields the raw literal; BigDecimal preserves it losslessly.
             JsonToken.NUMBER -> w.value(BigDecimal(r.nextString()))
+
             JsonToken.BOOLEAN -> w.value(r.nextBoolean())
+
             JsonToken.NULL -> { r.nextNull(); w.nullValue() }
+
             else -> error("Unexpected token ${r.peek()}")
         }
     }
 
     companion object {
+        /** Top-level index key holding the repo section. */
+        private const val KEY_REPO = "repo"
+
+        /** Top-level index key holding the packages map. */
+        private const val KEY_PACKAGES = "packages"
+
+        /** Tolerant of unknown keys, so newer index fields never break parsing. */
         val DEFAULT_JSON = Json {
             ignoreUnknownKeys = true
             coerceInputValues = true

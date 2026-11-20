@@ -81,11 +81,12 @@ class FDroidRepository(
 
     private val refreshMutex = Mutex()
     private val detailsCache = LruCache<String, AppDetails>(DETAILS_CACHE_SIZE)
-    private val repoDir get() = File(storageDir, "repos/${repo.id}")
-    private val indexFile get() = File(repoDir, "index-v2.json")
-    private val metaFile get() = File(repoDir, "meta.json")
-    private val appsFile get() = File(repoDir, "apps.json")
+    private val repoDir get() = File(storageDir, "$REPOS_DIR/${repo.id}")
+    private val indexFile get() = File(repoDir, INDEX_FILE_NAME)
+    private val metaFile get() = File(repoDir, META_FILE_NAME)
+    private val appsFile get() = File(repoDir, APPS_FILE_NAME)
 
+    /** Describes the cached `index-v2.json`: which index it is, when it was fetched, how many packages it holds. */
     @Serializable
     private data class CacheMeta(val indexTimestamp: Long, val fetchedAt: Long, val numPackages: Int = 0)
 
@@ -119,7 +120,10 @@ class FDroidRepository(
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
-                if (_snapshot.value == null) throw e
+                if (_snapshot.value == null) {
+                    throw e
+                }
+
                 Log.w(TAG, "entry.jar unreachable, keeping cached index", e)
                 null
             }
@@ -140,10 +144,11 @@ class FDroidRepository(
             }
 
             if (needsDownload || _snapshot.value == null) {
-                val (info, apps) = parseIndex(entry?.index?.numPackages ?: -1)
+                val (info, apps) = parseIndex(entry?.index?.numPackages ?: UNKNOWN_PACKAGE_COUNT)
                 _snapshot.value = RepoSnapshot(info, apps, fromCache = !needsDownload)
                 writeAppsCache(entry?.timestamp ?: cached?.indexTimestamp ?: info.timestamp, info, apps)
             }
+
             _sync.value = SyncState.Idle
         } catch (e: CancellationException) {
             throw e
@@ -153,7 +158,9 @@ class FDroidRepository(
         }
     }
 
-    /** Forgets the loaded index and deletes everything cached on disk for this repo. */
+    /**
+     * Forgets the loaded index and deletes everything cached on disk for this repo.
+     */
     suspend fun deleteCache() = refreshMutex.withLock {
         _snapshot.value = null
         _sync.value = SyncState.Idle
@@ -162,7 +169,9 @@ class FDroidRepository(
         Unit
     }
 
-    /** The row for [packageName] in the current snapshot, if one is loaded. */
+    /**
+     * The row for [packageName] in the current snapshot, if one is loaded.
+     */
     fun app(packageName: String): App? = _snapshot.value?.apps?.firstOrNull { it.packageName == packageName }
 
     /**
@@ -175,7 +184,7 @@ class FDroidRepository(
         return withContext(Dispatchers.IO) {
             // A refresh swaps the file by rename, so a scan already running keeps reading the old one.
             check(indexFile.exists()) { "Package index not downloaded yet" }
-            val pkg = indexFile.inputStream().buffered(256 * 1024).use { input ->
+            val pkg = indexFile.inputStream().buffered(IO_BUFFER_SIZE).use { input ->
                 parser.findPackage(input, packageName) { ensureActive() }
             }
             pkg?.let { AppDetails.from(packageName, it, repo) }?.also { detailsCache.put(packageName, it) }
@@ -196,7 +205,8 @@ class FDroidRepository(
                 Log.i(TAG, "Loaded ${fast.apps.size} apps from apps.json in ${System.currentTimeMillis() - started} ms")
                 return
             }
-            val (info, apps) = parseIndex(cached.numPackages.takeIf { it > 0 } ?: -1)
+
+            val (info, apps) = parseIndex(cached.numPackages.takeIf { it > 0 } ?: UNKNOWN_PACKAGE_COUNT)
             _snapshot.value = RepoSnapshot(info, apps, fromCache = true)
             writeAppsCache(cached.indexTimestamp, info, apps)
         } catch (e: CancellationException) {
@@ -206,23 +216,31 @@ class FDroidRepository(
         }
     }
 
+    /**
+     * Decodes `apps.json`, returning null when it is missing, unreadable, or not for [indexTimestamp].
+     */
     @OptIn(ExperimentalSerializationApi::class)
     private suspend fun readAppsCache(indexTimestamp: Long): AppsCache? = withContext(Dispatchers.Default) {
-        if (!appsFile.exists()) return@withContext null
+        if (!appsFile.exists()) {
+            return@withContext null
+        }
+
         runCatching {
-            appsFile.inputStream().buffered(256 * 1024).use { json.decodeFromStream(AppsCache.serializer(), it) }
+            appsFile.inputStream().buffered(IO_BUFFER_SIZE).use { json.decodeFromStream(AppsCache.serializer(), it) }
         }
             .onFailure { Log.w(TAG, "apps.json unreadable, will re-parse index", it) }
             .getOrNull()
             ?.takeIf { it.version == APPS_CACHE_VERSION && it.indexTimestamp == indexTimestamp }
     }
 
-    /** Written atomically (temp file + rename) so a crash mid-write can't leave a torn cache. */
+    /**
+     * Written atomically (temp file + rename) so a crash mid-write can't leave a torn cache.
+     */
     private suspend fun writeAppsCache(indexTimestamp: Long, info: RepoInfo, apps: List<App>) =
         withContext(Dispatchers.IO) {
             runCatching {
                 repoDir.mkdirs()
-                val tmp = File(repoDir, "apps.json.tmp")
+                val tmp = File(repoDir, APPS_TMP_FILE_NAME)
                 tmp.writeText(
                     json.encodeToString(AppsCache.serializer(), AppsCache(APPS_CACHE_VERSION, indexTimestamp, info, apps)),
                 )
@@ -234,12 +252,15 @@ class FDroidRepository(
             Unit
         }
 
+    /**
+     * Streams the on-disk index into the repo info and the app rows, newest first, publishing parse progress.
+     */
     private suspend fun parseIndex(expectedPackages: Int): Pair<RepoInfo, List<App>> =
         withContext(Dispatchers.Default) {
             _sync.value = SyncState.Loading(SyncState.Loading.Phase.PARSING, 0f)
             var info: RepoInfo? = null
-            val apps = ArrayList<App>(if (expectedPackages > 0) expectedPackages else 4096)
-            indexFile.inputStream().buffered(256 * 1024).use { input ->
+            val apps = ArrayList<App>(if (expectedPackages > 0) expectedPackages else DEFAULT_APP_CAPACITY)
+            indexFile.inputStream().buffered(IO_BUFFER_SIZE).use { input ->
                 parser.parse(input, object : IndexV2StreamParser.Visitor {
                     override fun onRepo(repo: RepoV2) {
                         info = repo.toInfo()
@@ -247,7 +268,7 @@ class FDroidRepository(
 
                     override fun onPackage(packageName: String, pkg: PackageV2) {
                         apps += App.from(packageName, pkg, repo)
-                        if (expectedPackages > 0 && apps.size % 100 == 0) {
+                        if (expectedPackages > 0 && apps.size % PROGRESS_STEP == 0) {
                             _sync.update {
                                 SyncState.Loading(
                                     SyncState.Loading.Phase.PARSING,
@@ -263,6 +284,9 @@ class FDroidRepository(
             repoInfo to apps
         }
 
+    /**
+     * Maps the index `repo` section to the UI-facing [RepoInfo], localizing every name.
+     */
     private fun RepoV2.toInfo() = RepoInfo(
         name = name.localized() ?: repo.name,
         description = description.localized(),
@@ -272,18 +296,56 @@ class FDroidRepository(
         antiFeatures = antiFeatures.mapValues { (id, a) -> a.name.localized() ?: id },
     )
 
+    /**
+     * Reads `meta.json`, or null when it is absent or unreadable.
+     */
     private fun readCacheMeta(): CacheMeta? = runCatching {
         if (!metaFile.exists()) null else json.decodeFromString(CacheMeta.serializer(), metaFile.readText())
     }.getOrNull()
 
+    /**
+     * Persists [meta] next to the downloaded index.
+     */
     private fun writeCacheMeta(meta: CacheMeta) {
         repoDir.mkdirs()
         metaFile.writeText(json.encodeToString(CacheMeta.serializer(), meta))
     }
 
     companion object {
+        /** Log tag. */
         private const val TAG = "FDroidRepository"
+
+        /** Bumped whenever the cached apps format changes, so stale caches are rebuilt. */
         private const val APPS_CACHE_VERSION = 3
+
+        /** How many parsed [AppDetails] stay in memory. */
         private const val DETAILS_CACHE_SIZE = 16
+
+        /** Directory under `filesDir` holding one sub-directory per repo. */
+        private const val REPOS_DIR = "repos"
+
+        /** The downloaded index-v2 file inside a repo directory. */
+        private const val INDEX_FILE_NAME = "index-v2.json"
+
+        /** The repo metadata file inside a repo directory. */
+        private const val META_FILE_NAME = "meta.json"
+
+        /** The parsed app list inside a repo directory. */
+        private const val APPS_FILE_NAME = "apps.json"
+
+        /** Written first, then renamed over [APPS_FILE_NAME] so a crash never leaves a half file. */
+        private const val APPS_TMP_FILE_NAME = "apps.json.tmp"
+
+        /** Buffer size for reading and writing index files. */
+        private const val IO_BUFFER_SIZE = 256 * 1024
+
+        /** Passed to [parseIndex] when the package count is not known, so no progress fraction is reported. */
+        private const val UNKNOWN_PACKAGE_COUNT = -1
+
+        /** Initial list capacity when the package count is unknown. */
+        private const val DEFAULT_APP_CAPACITY = 4096
+
+        /** Parse progress is published once per this many packages, to avoid flooding the UI. */
+        private const val PROGRESS_STEP = 100
     }
 }

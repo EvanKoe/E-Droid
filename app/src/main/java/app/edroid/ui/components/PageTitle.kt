@@ -19,11 +19,20 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import app.edroid.R
 
+/** Font weight of the page heading. */
+private val TitleWeight = FontWeight.W700
+
+/** Horizontal padding around the heading. */
+private val HorizontalInset = 12.dp
+
+/** Vertical padding around the heading. */
+private val VerticalInset = 4.dp
+
 /** Roboto Flex at display weight, widened on the `wdth` axis for the expressive page heading. */
 private val RobotoFlexDisplay = FontFamily(
     Font(
         resId = R.font.roboto_flex,
-        weight = FontWeight.W700,
+        weight = TitleWeight,
         variationSettings = FontVariation.Settings(
             FontVariation.weight(700),
             FontVariation.width(125f),
@@ -46,14 +55,15 @@ fun PageTitle(
 ) {
     val style: TextStyle = MaterialTheme.typography.headlineLarge.copy(
         fontFamily = RobotoFlexDisplay,
-        fontWeight = FontWeight.W700,
+        fontWeight = TitleWeight,
     )
 
+    // Heading text
     Text(
         text = text,
         style = style,
         color = color,
         fontSize = size,
-        modifier = modifier.padding(horizontal = 12.dp, vertical = 4.dp),
+        modifier = modifier.padding(horizontal = HorizontalInset, vertical = VerticalInset),
     )
 }

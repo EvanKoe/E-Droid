@@ -7,10 +7,16 @@ import kotlinx.serialization.Serializable
 /** A GitHub repository, identified the way its URL names it: `github.com/<owner>/<name>`. */
 @Serializable
 data class GitHubRepo(val owner: String, val name: String) {
+    /**
+     * `owner/name`, the form users type and [parse] accepts back.
+     */
     override fun toString() = "$owner/$name"
 
     companion object {
+        /** A valid GitHub owner or repo name. */
         private val SEGMENT = Regex("^[A-Za-z0-9_.-]+$")
+
+        /** The github.com prefix stripped from a pasted repo URL. */
         private val URL_PREFIX = Regex("^(https?://)?(www\\.)?github\\.com/", RegexOption.IGNORE_CASE)
 
         /**
@@ -19,7 +25,10 @@ data class GitHubRepo(val owner: String, val name: String) {
          */
         fun parse(raw: String): GitHubRepo? {
             val parts = raw.trim().replace(URL_PREFIX, "").trim('/').split('/')
-            if (parts.size < 2) return null
+            if (parts.size < 2) {
+                return null
+            }
+
             val name = parts[1].removeSuffix(".git")
             return if (SEGMENT.matches(parts[0]) && SEGMENT.matches(name)) GitHubRepo(parts[0], name) else null
         }
@@ -39,10 +48,13 @@ data class GitHubRelease(
     @SerialName("html_url") val htmlUrl: String,
     val assets: List<GitHubAsset> = emptyList(),
 ) {
+    /** The release's assets that are APK files. */
     val apkAssets: List<GitHubAsset> get() = assets.filter { it.isApk }
 }
 
-/** The newest stable release that ships an APK; GitHub lists newest first. */
+/**
+ * The newest stable release that ships an APK; GitHub lists newest first.
+ */
 fun List<GitHubRelease>.latestInstallable(): GitHubRelease? =
     firstOrNull { !it.draft && !it.prerelease && it.apkAssets.isNotEmpty() }
 
@@ -59,6 +71,9 @@ data class TrackedApk(
     val versionCode: Long,
     val versionName: String,
 ) {
+    /**
+     * The tracked APK in the form the installer takes; fields only an F-Droid index knows stay empty.
+     */
     fun toAppVersion() = AppVersion(
         versionName = versionName,
         versionCode = versionCode,
@@ -72,15 +87,18 @@ data class TrackedApk(
     )
 }
 
+/** A followed GitHub repo, its latest known APK, and whether the user must pick among several APK assets. */
 @Serializable
 data class TrackedRepo(
     val repo: GitHubRepo,
     val latest: TrackedApk? = null,
     val needsChoice: Boolean = false,
 ) {
+    /** Case-insensitive identity, since GitHub treats `Owner/Name` and `owner/name` as one repo. */
     val key: String get() = repo.toString().lowercase()
 }
 
+/** One downloadable file attached to a [GitHubRelease]. */
 @Serializable
 data class GitHubAsset(
     val name: String,
@@ -91,6 +109,8 @@ data class GitHubAsset(
     /** `sha256:<hex>` when GitHub computed one. */
     @SerialName("digest") val digest: String? = null,
 ) {
+    /** Whether the file name marks this asset as an APK. */
     val isApk: Boolean get() = name.endsWith(".apk", ignoreCase = true)
+    /** [digest] without its `sha256:` prefix, or null when GitHub gave none. */
     val sha256: String? get() = digest?.removePrefix("sha256:")
 }

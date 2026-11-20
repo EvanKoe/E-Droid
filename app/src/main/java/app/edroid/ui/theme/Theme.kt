@@ -14,6 +14,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.platform.LocalContext
 
+/** Fallback light scheme for devices without dynamic colour (see `Color.kt`). */
 private val LightColors = lightColorScheme(
     primary = primaryLight,
     onPrimary = onPrimaryLight,
@@ -51,6 +52,7 @@ private val LightColors = lightColorScheme(
     surfaceContainerHighest = surfaceContainerHighestLight,
 )
 
+/** Fallback dark scheme for devices without dynamic colour (see `Color.kt`). */
 private val DarkColors = darkColorScheme(
     primary = primaryDark,
     onPrimary = onPrimaryDark,
@@ -106,7 +108,9 @@ fun EDroidTheme(
             val context = LocalContext.current
             if (darkTheme) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
         }
+
         darkTheme -> DarkColors
+
         else -> LightColors
     }
 

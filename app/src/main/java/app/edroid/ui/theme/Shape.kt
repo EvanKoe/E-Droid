@@ -13,6 +13,9 @@ val GroupedInnerRadius: Dp = 4.dp
 /** Vertical gap between stacked items of a grouped list. */
 val GroupedItemSpacing: Dp = 4.dp
 
+/** Horizontal inset between a page's content and the screen edge. */
+val PageHorizontalPadding: Dp = 16.dp
+
 /**
  * Shape for an item in a grouped (segmented) list: large radius on the group's outer edges,
  * tight radius between stacked items, so a run of cards reads as one block.
@@ -31,11 +34,15 @@ fun groupedShape(isFirst: Boolean = false, isLast: Boolean = false) = RoundedCor
     bottomEnd = if (isLast) GroupedOuterRadius else GroupedInnerRadius,
 )
 
-/** [groupedShape] for the item at [index] in a list of [count] items. */
+/**
+ * [groupedShape] for the item at [index] in a list of [count] items.
+ */
 fun groupedShapeAt(index: Int, count: Int) =
     groupedShape(isFirst = index == 0, isLast = index == count - 1)
 
-/** [groupedShapeAt] for a horizontal row: outer radius on the row's start and end edges. */
+/**
+ * [groupedShapeAt] for a horizontal row: outer radius on the row's start and end edges.
+ */
 fun horizontalGroupedShapeAt(index: Int, count: Int): RoundedCornerShape {
     val start = if (index == 0) GroupedOuterRadius else GroupedInnerRadius
     val end = if (index == count - 1) GroupedOuterRadius else GroupedInnerRadius
@@ -50,6 +57,9 @@ fun gridGroupedShapeAt(index: Int, count: Int, columns: Int): RoundedCornerShape
     val col = index % columns
     val firstRow = index < columns
     val lastRowStart = (count - 1) / columns * columns
+    /**
+     * Corner radius for a corner that is on the outer edge of the block, or not.
+     */
     fun r(outer: Boolean) = if (outer) GroupedOuterRadius else GroupedInnerRadius
     return RoundedCornerShape(
         topStart = r(index == 0),
@@ -58,6 +68,3 @@ fun gridGroupedShapeAt(index: Int, count: Int, columns: Int): RoundedCornerShape
         bottomEnd = r(index == count - 1 || (col == columns - 1 && index + columns >= count)),
     )
 }
-
-/** Horizontal inset between a page's content and the screen edge. */
-val PageHorizontalPadding: Dp = 16.dp

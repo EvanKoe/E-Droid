@@ -50,6 +50,10 @@ data class App(
     }
 
     companion object {
+
+        /**
+         *  Builds the display row for [packageName], picking the latest version per the preferred-signer rule.
+         */
         fun from(
             packageName: String,
             pkg: PackageV2,
@@ -57,7 +61,7 @@ data class App(
             locale: Locale = Locale.getDefault(),
         ): App {
             val meta = pkg.metadata
-            // Prefer the newest version signed by the preferred signer; fall back to the newest overall.
+
             val latest = pkg.versions.values
                 .filter { v ->
                     val signer = meta.preferredSigner ?: return@filter true
@@ -65,6 +69,7 @@ data class App(
                 }
                 .maxByOrNull { it.versionCode }
                 ?: pkg.versions.values.maxByOrNull { it.versionCode }
+
             return App(
                 packageName = packageName,
                 name = meta.name?.localized(locale) ?: packageName,

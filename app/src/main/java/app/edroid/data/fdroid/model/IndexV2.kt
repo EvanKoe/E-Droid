@@ -30,7 +30,9 @@ data class Entry(
     val index: EntryFileV2,
     val diffs: Map<String, EntryFileV2> = emptyMap(),
 ) {
-    /** Returns the diff that upgrades an index with [timestamp] to the current one, if any. */
+    /**
+     * Returns the diff that upgrades an index with [timestamp] to the current one, if any.
+     */
     fun diffFor(timestamp: Long): EntryFileV2? = diffs[timestamp.toString()]
 }
 
@@ -158,6 +160,7 @@ data class Screenshots(
     val tv: LocalizedFileListV2? = null,
 )
 
+/** Anti-feature key F-Droid sets on versions with a known vulnerability. */
 const val ANTI_FEATURE_KNOWN_VULNERABILITY = "KnownVuln"
 
 @Serializable

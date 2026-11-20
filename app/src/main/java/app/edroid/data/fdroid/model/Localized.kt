@@ -9,7 +9,10 @@ import java.util.Locale
  * ("de-DE"), then "en-US", "en", and finally whatever comes first.
  */
 fun <T> Map<String, T>.localized(locale: Locale = Locale.getDefault()): T? {
-    if (isEmpty()) return null
+    if (isEmpty()) {
+        return null
+    }
+
     val tag = locale.toLanguageTag()
     val lang = locale.language
     this[tag]?.let { return it }

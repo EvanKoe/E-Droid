@@ -16,6 +16,7 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 
+/** Immutable state of the search screen: query, results and browse data. */
 data class SearchUiState(
     val query: String = "",
     val recentSearches: List<String> = emptyList(),
@@ -32,6 +33,7 @@ data class SearchUiState(
     val showResults: Boolean get() = query.isNotBlank()
 }
 
+/** Combines the repo snapshots, query, repo filter and recents into one [SearchUiState]. */
 class SearchViewModel(
     private val repository: RepoHub,
     private val recentSearches: RecentSearchesStore,
@@ -40,6 +42,7 @@ class SearchViewModel(
     private val query = MutableStateFlow("")
     private val selectedRepo = MutableStateFlow<String?>(null)
 
+    /** The single state the search screen renders. */
     val uiState: StateFlow<SearchUiState> =
         combine(
             repository.snapshot,
@@ -64,32 +67,54 @@ class SearchViewModel(
                 repos = perRepo.map { (repo, _) -> repo.id to repo.name },
                 selectedRepoId = repoId,
             )
-        }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), SearchUiState())
+        }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MS), SearchUiState())
 
+    /**
+     * Replaces the current query text.
+     */
     fun onQueryChange(value: String) = query.update { value }
 
-    /** Called when the user submits the query (IME search action): remembers it as a recent search. */
+    /**
+     * Called when the user submits the query (IME search action): remembers it as a recent search.
+     */
     fun commitSearch() = recentSearches.add(query.value)
 
-    /** Re-runs a recent search. */
+    /**
+     * Re-runs a recent search.
+     */
     fun onRecentSelected(value: String) {
         query.value = value
         recentSearches.add(value)
     }
 
+    /**
+     * Forgets one recent search.
+     */
     fun onRemoveRecent(value: String) = recentSearches.remove(value)
 
+    /**
+     * Empties the query, returning to the browse view.
+     */
     fun clearQuery() = query.update { "" }
 
-    /** Narrows results to [id], or back to every repo when [id] is null or already selected. */
+    /**
+     * Narrows results to [id], or back to every repo when [id] is null or already selected.
+     */
     fun onRepoSelected(id: String?) = selectedRepo.update { current -> id.takeIf { it != current } }
 
+    /**
+     * True when [needle] appears in the app's name, package or summary.
+     */
     private fun App.matches(needle: String): Boolean =
         name.contains(needle, ignoreCase = true) ||
             packageName.contains(needle, ignoreCase = true) ||
             summary?.contains(needle, ignoreCase = true) == true
 
     companion object {
+        /** How long state flows stay hot after the last subscriber leaves. */
+        private const val STOP_TIMEOUT_MS = 5_000L
+
+        /** Builds the ViewModel from the app container. */
         val Factory: ViewModelProvider.Factory = viewModelFactory {
             initializer {
                 val app = this[ViewModelProvider.AndroidViewModelFactory.APPLICATION_KEY] as EDroidApp

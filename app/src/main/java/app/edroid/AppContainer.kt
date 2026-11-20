@@ -18,6 +18,12 @@ import kotlinx.coroutines.SupervisorJob
 import okhttp3.OkHttpClient
 import java.util.concurrent.TimeUnit
 
+/** OkHttp connect timeout. */
+private const val CONNECT_TIMEOUT_SECONDS = 20L
+
+/** OkHttp read timeout; indexes can be large. */
+private const val READ_TIMEOUT_SECONDS = 60L
+
 /**
  * Hand-rolled dependency container. Small enough that a DI framework would be more ceremony
  * than value; swap for Hilt/Koin if the graph grows.
@@ -26,8 +32,8 @@ class AppContainer(context: Context) {
     val json = IndexV2StreamParser.DEFAULT_JSON
 
     val okHttpClient: OkHttpClient = OkHttpClient.Builder()
-        .connectTimeout(20, TimeUnit.SECONDS)
-        .readTimeout(60, TimeUnit.SECONDS)
+        .connectTimeout(CONNECT_TIMEOUT_SECONDS, TimeUnit.SECONDS)
+        .readTimeout(READ_TIMEOUT_SECONDS, TimeUnit.SECONDS)
         .build()
 
     private val repoService = FDroidRepoService(okHttpClient, json, tempDir = context.cacheDir.resolve("entry"))
@@ -46,7 +52,6 @@ class AppContainer(context: Context) {
 
     val apkInstaller = ApkInstaller(context, okHttpClient)
 
-    /** Outlives every screen; used for work that must finish even if the UI goes away. */
     val appScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
 
     val repoStore = RepoStore(context, json)

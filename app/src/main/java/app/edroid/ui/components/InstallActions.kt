@@ -61,6 +61,36 @@ import app.edroid.data.install.openApp
 import app.edroid.data.install.requestUninstall
 import java.io.File
 
+/** Horizontal gap between the leading and trailing buttons. */
+internal val ActionGap = 8.dp
+
+/** Width Install squishes down to when it turns into Cancel. */
+internal val CancelWidth = 112.dp
+
+/** Tighter than the default so two buttons fit beside the icon. */
+private val PairedButtonPadding = PaddingValues(horizontal = 12.dp)
+
+/** Default height of the action row. */
+private val DefaultActionHeight = 56.dp
+
+/** Vertical gap between the progress text and its bar. */
+private val ProgressGap = 8.dp
+
+/** Damping ratio of [bouncySpring]. */
+private const val BOUNCY_DAMPING = 0.5f
+
+/** Scale the trailing label shrinks from or to while it swaps. */
+private const val LABEL_SWAP_SCALE = 0.7f
+
+/** Width below which the trailing button is not drawn at all. */
+private val MinVisibleTrailingWidth = 1.dp
+
+/** Multiplier turning a 0..1 download fraction into a percentage. */
+private const val PERCENT = 100
+
+/** How much a pressed button widens (and its neighbor narrows), as in an expressive ButtonGroup. */
+private const val PRESS_EXPAND_RATIO = 0.15f
+
 /** Everything [InstallActions] needs for one package: what to show and what each button does. */
 internal class AppInstallActions(
     val state: ActionsState,
@@ -96,24 +126,31 @@ internal fun appInstallActions(
     val installer = remember(context) { (context.applicationContext as EDroidApp).container.apkInstaller }
     val installStates by installer.states.collectAsStateWithLifecycle()
     val installState = installStates[packageName] ?: InstallState.Idle
+
     if (reportFailures) {
         LaunchedEffect(installState) {
             (installState as? InstallState.Failed)?.let { Toast.makeText(context, it.message, Toast.LENGTH_LONG).show() }
         }
     }
+
     // Seeded synchronously so an installed app doesn't open on Install and animate over to Uninstall.
     val initialInstalledVersion = remember(context, packageName) { context.installedVersionCodeNow(packageName) }
+
     val installedVersion by remember(context, packageName) {
         context.applicationContext.installedVersionCode(packageName)
     }.collectAsStateWithLifecycle(initialValue = initialInstalledVersion)
+
     // Re-checked per installed version, since an update can add or drop the launcher activity.
     val canOpen = remember(context, packageName, installedVersion) {
         installedVersion != null && context.canOpenApp(packageName)
     }
+
     val installedVersionName = remember(context, packageName, installedVersion) { context.installedVersionNameNow(packageName) }
-    val targetVersionCode =version?.versionCode ?: latestVersionCode
+    val targetVersionCode = version?.versionCode ?: latestVersionCode
+
     // Lets the "ready to install" notification show when a download finishes in the background.
     val notificationPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) {}
+
     return AppInstallActions(
         state = ActionsState(
             install = installState,
@@ -130,6 +167,7 @@ internal fun appInstallActions(
             ) {
                 notificationPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
             }
+
             version?.let { installer.install(packageName, appName, it, installSource()) }
         },
         onOpen = { context.openApp(packageName) },
@@ -157,6 +195,7 @@ internal data class ActionsState(
     /** Downloading or handed to the system installer. */
     val busy get() = install is InstallState.Downloading || install is InstallState.Installing
 
+    /** What fills the slot left of the trailing button, derived from the install and installed state. */
     val leading: LeadingContent
         get() = when {
             busy -> LeadingContent.Progress
@@ -164,6 +203,7 @@ internal data class ActionsState(
             else -> LeadingContent.None
         }
 
+    /** Which action the trailing button currently offers. */
     val trailing: TrailingAction
         get() = when {
             busy -> TrailingAction.Cancel
@@ -178,20 +218,11 @@ internal data class ActionsState(
 /** Holds the last trailing action that had a look, so a button shrinking to nothing keeps it. */
 private class LastShown(var value: TrailingAction)
 
-internal val ActionGap = 8.dp
-/** Width Install squishes down to when it turns into Cancel. */
-internal val CancelWidth = 112.dp
-// Tighter than the default so two buttons fit beside the icon.
-private val PairedButtonPadding = PaddingValues(horizontal = 12.dp)
-
-/** How much a pressed button widens (and its neighbor narrows), as in an expressive ButtonGroup. */
-private const val PRESS_EXPAND_RATIO = 0.15f
-
 /**
  * Looser than the expressive scheme's spatial spring (damping 0.8) so the morphs visibly
  * overshoot and settle.
  */
-internal fun <T> bouncySpring() = spring<T>(dampingRatio = 0.5f, stiffness = Spring.StiffnessMediumLow)
+internal fun <T> bouncySpring() = spring<T>(dampingRatio = BOUNCY_DAMPING, stiffness = Spring.StiffnessMediumLow)
 
 /**
  * One leading slot and one trailing button, filling the width [modifier] gives them:
@@ -210,7 +241,7 @@ internal fun <T> bouncySpring() = spring<T>(dampingRatio = 0.5f, stiffness = Spr
 internal fun InstallActions(
     actions: AppInstallActions,
     modifier: Modifier = Modifier,
-    height: Dp = 56.dp,
+    height: Dp = DefaultActionHeight,
 ) {
     val state = actions.state
     val motion = MaterialTheme.motionScheme
@@ -221,24 +252,34 @@ internal fun InstallActions(
     val trailingPressed by trailingInteractions.collectIsPressedAsState()
 
     val lastShown = remember { LastShown(state.trailing) }
-    if (state.trailing != TrailingAction.None) lastShown.value = state.trailing
-    val shown = lastShown.value
 
+    if (state.trailing != TrailingAction.None) {
+        lastShown.value = state.trailing
+    }
+
+    val shown = lastShown.value
     val cancel = shown == TrailingAction.Cancel
+
     val containerColor by animateColorAsState(
         if (cancel) colors.secondaryContainer else colors.primary, motion.defaultEffectsSpec(), label = "trailingContainer",
     )
+
     val contentColor by animateColorAsState(
         if (cancel) colors.onSecondaryContainer else colors.onPrimary, motion.defaultEffectsSpec(), label = "trailingContent",
     )
 
+    // Action row
     BoxWithConstraints(modifier.height(height)) {
         val full = maxWidth
         val half = (full - ActionGap) / 2
+
         val target = when (state.trailing) {
             TrailingAction.None -> 0.dp
+
             TrailingAction.Cancel -> CancelWidth
+
             TrailingAction.Install, TrailingAction.Retry -> full
+
             TrailingAction.Update, TrailingAction.Open -> if (state.leading != LeadingContent.Uninstall) {
                 full
             } else {
@@ -249,12 +290,15 @@ internal fun InstallActions(
                 }
             }
         }
+
         // Clamped: past either end the overshoot would push a button out of the row.
         val trailingWidth = animateDpAsState(target, bouncySpring(), label = "trailingWidth").value.coerceIn(0.dp, full)
+
         // The gap only exists while both sides have room, so a lone button spans the full row.
         val gap = ActionGap * (trailingWidth / ActionGap).coerceIn(0f, 1f) * ((full - trailingWidth) / ActionGap).coerceIn(0f, 1f)
         val leadingWidth = (full - trailingWidth - gap).coerceAtLeast(0.dp)
 
+        // Leading slot
         AnimatedContent(
             targetState = state,
             contentKey = { it.leading },
@@ -263,7 +307,10 @@ internal fun InstallActions(
             label = "leading",
         ) { s ->
             when (s.leading) {
+                // Download progress
                 LeadingContent.Progress -> DownloadProgress(s.install, Modifier.fillMaxSize())
+
+                // Uninstall button
                 LeadingContent.Uninstall -> FilledTonalButton(
                     onClick = actions.onUninstall,
                     shapes = ButtonDefaults.shapes(),
@@ -273,11 +320,13 @@ internal fun InstallActions(
                 ) {
                     ActionLabel(R.string.action_uninstall)
                 }
+
                 LeadingContent.None -> Spacer(Modifier.fillMaxSize())
             }
         }
 
-        if (trailingWidth > 1.dp) {
+        // Trailing action button
+        if (trailingWidth > MinVisibleTrailingWidth) {
             Button(
                 onClick = {
                     when (state.trailing) {
@@ -297,8 +346,8 @@ internal fun InstallActions(
                 AnimatedContent(
                     targetState = shown,
                     transitionSpec = {
-                        (fadeIn(motion.defaultEffectsSpec()) + scaleIn(bouncySpring(), initialScale = 0.7f))
-                            .togetherWith(fadeOut(motion.fastEffectsSpec()) + scaleOut(motion.fastSpatialSpec(), targetScale = 0.7f))
+                        (fadeIn(motion.defaultEffectsSpec()) + scaleIn(bouncySpring(), initialScale = LABEL_SWAP_SCALE))
+                            .togetherWith(fadeOut(motion.fastEffectsSpec()) + scaleOut(motion.fastSpatialSpec(), targetScale = LABEL_SWAP_SCALE))
                     },
                     label = "trailingLabel",
                 ) { action ->
@@ -317,23 +366,33 @@ internal fun InstallActions(
     }
 }
 
+/**
+ * Single-line button label for the string [res].
+ */
 @Composable
 internal fun ActionLabel(@StringRes res: Int) {
     Text(stringResource(res), style = MaterialTheme.typography.titleMedium, maxLines = 1, softWrap = false, overflow = TextOverflow.Clip)
 }
 
-/** Progress text over a wavy bar; indeterminate while the size is unknown or the system installs. */
+/**
+ * Progress text over a wavy bar; indeterminate while the size is unknown or the system installs.
+ */
 @Composable
 private fun DownloadProgress(install: InstallState, modifier: Modifier = Modifier) {
     val progress = (install as? InstallState.Downloading)?.progress
+
     Column(
         modifier = modifier,
-        verticalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterVertically),
+        verticalArrangement = Arrangement.spacedBy(ProgressGap, Alignment.CenterVertically),
     ) {
+
+        // Progress text
         Text(
             text = when {
                 install is InstallState.Installing -> stringResource(R.string.action_installing)
-                progress != null -> stringResource(R.string.action_downloading_percent, (progress * 100).toInt())
+
+                progress != null -> stringResource(R.string.action_downloading_percent, (progress * PERCENT).toInt())
+
                 else -> stringResource(R.string.action_downloading)
             },
             style = MaterialTheme.typography.titleSmall,
@@ -341,8 +400,11 @@ private fun DownloadProgress(install: InstallState, modifier: Modifier = Modifie
             softWrap = false,
             overflow = TextOverflow.Clip,
         )
+
+        // Progress bar
         if (progress != null) {
             val animated by animateFloatAsState(progress, MaterialTheme.motionScheme.defaultEffectsSpec(), label = "download")
+
             LinearWavyProgressIndicator(progress = { animated }, modifier = Modifier.fillMaxWidth())
         } else {
             LinearWavyProgressIndicator(modifier = Modifier.fillMaxWidth())
