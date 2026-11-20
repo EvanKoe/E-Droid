@@ -145,6 +145,9 @@
         <item>Tell you a download is ready to install while EDroid is in the background</item>
     </string-array>
     <string name="action_retry">Retry</string>
+    <string name="action_close">Close</string>
+    <string name="install_failed_title">Installation failed</string>
+    <string name="install_failed_body">An error occurred during the app installation</string>
     <string name="loading_entry">Checking repository…</string>
     <string name="loading_index">Downloading package index…</string>
     <string name="loading_parsing">Reading packages…</string>

@@ -218,6 +218,13 @@ class ApkInstaller(private val context: Context, private val client: OkHttpClien
     }
 
     /**
+     * Acknowledges a reported failure so its dialog does not reopen; leaves a retry already underway alone.
+     */
+    fun dismissFailure(packageName: String) {
+        _states.update { if (it[packageName] is InstallState.Failed) it - packageName else it }
+    }
+
+    /**
      * Copies [input] into the session's base.apk, reporting progress; returns the SHA-256 as lowercase hex.
      */
     private suspend fun writeApk(session: PackageInstaller.Session, input: InputStream, total: Long?, download: Download): String {

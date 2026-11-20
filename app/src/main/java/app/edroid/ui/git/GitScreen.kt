@@ -37,10 +37,12 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
+import androidx.compose.material3.Badge
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Surface
@@ -133,7 +135,7 @@ fun GitScreen(
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val rows = state.rows
     val refreshing = state.refreshing
-    val hasUpdates = state.hasUpdates
+    val updateCount = state.updateCount
 
     LaunchedEffect(Unit) {
         viewModel.messages.collect { Toast.makeText(context, context.resolve(it), Toast.LENGTH_LONG).show() }
@@ -272,8 +274,18 @@ fun GitScreen(
                     ),
                 ) { ActionContent(Icons.Rounded.Add, R.string.git_add) }
 
-                // Update all button
-                TextButton(onClick = viewModel::updateAll, enabled = hasUpdates) { ActionContent(Icons.Rounded.Refresh, R.string.git_update_all) }
+                // Update all button, with a pill counting the available updates
+                TextButton(onClick = viewModel::updateAll, enabled = updateCount != 0) {
+                    ActionContent(Icons.Rounded.Refresh, R.string.git_update_all)
+
+                    if (updateCount != 0) {
+                        Spacer(Modifier.width(8.dp))
+                        Badge(
+                            containerColor = MaterialTheme.colorScheme.primary,
+                            contentColor = MaterialTheme.colorScheme.onPrimary,
+                        ) { Text("$updateCount") }
+                    }
+                }
             }
         }
     }
@@ -355,25 +367,36 @@ private fun GitRepoCard(row: GitRow, shape: Shape, viewModel: GitViewModel) {
         )
     }
 
+    val scheme = MaterialTheme.colorScheme
+    val updatable = actions?.state?.updateAvailable == true
+
     Card(
         onClick = { expanded = !expanded },
         modifier = Modifier.fillMaxWidth(),
         shape = shape,
-        colors = CardDefaults.cardColors(containerColor = Layering.item),
+        colors = if (updatable) {
+            CardDefaults.cardColors(containerColor = scheme.primaryContainer, contentColor = scheme.onPrimaryContainer)
+        } else {
+            CardDefaults.cardColors(containerColor = Layering.item)
+        },
     ) {
         Column(Modifier.padding(16.dp).animateContentSize(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
 
             // Avatar and title row
             Row(horizontalArrangement = Arrangement.spacedBy(16.dp), verticalAlignment = Alignment.CenterVertically) {
 
-                // Owner avatar
-                Surface(shape = CircleShape, color = MaterialTheme.colorScheme.primaryContainer, modifier = Modifier.size(40.dp)) {
+                // Owner avatar; on a highlighted card its fallback steps up to primary so it doesn't vanish into the container.
+                Surface(
+                    shape = CircleShape,
+                    color = if (updatable) scheme.primary else scheme.primaryContainer,
+                    modifier = Modifier.size(40.dp),
+                ) {
                     // The glyph sits under the avatar: it shows while loading and whenever the avatar can't be fetched.
                     Box {
                         Icon(
                             GitIcon,
                             contentDescription = null,
-                            tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                            tint = if (updatable) scheme.onPrimary else scheme.onPrimaryContainer,
                             modifier = Modifier.padding(8.dp),
                         )
                         AsyncImage(
@@ -405,7 +428,7 @@ private fun GitRepoCard(row: GitRow, shape: Shape, viewModel: GitViewModel) {
                         Text(
                             tracked.repo.owner,
                             style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            color = mutedColor(),
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis,
                             modifier = Modifier.weight(1f, fill = false),
@@ -444,6 +467,16 @@ private fun GitRepoCard(row: GitRow, shape: Shape, viewModel: GitViewModel) {
 }
 
 /**
+ * Secondary text: onSurfaceVariant on a plain card, the card's own onPrimaryContainer on a highlighted (updatable) one.
+ */
+@Composable
+private fun mutedColor(): Color {
+    val scheme = MaterialTheme.colorScheme
+
+    return if (LocalContentColor.current == scheme.onPrimaryContainer) scheme.onPrimaryContainer else scheme.onSurfaceVariant
+}
+
+/**
  * One muted single-line version label.
  */
 @Composable
@@ -451,7 +484,7 @@ private fun VersionLine(text: String) {
     Text(
         text,
         style = MaterialTheme.typography.bodySmall,
-        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        color = mutedColor(),
         maxLines = 1,
         overflow = TextOverflow.Ellipsis,
     )
@@ -553,7 +586,7 @@ private fun StatusLine(
         Text(
             text,
             style = MaterialTheme.typography.bodyMedium,
-            color = if (isError) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant,
+            color = if (isError) MaterialTheme.colorScheme.error else mutedColor(),
         )
 
         // Progress bar

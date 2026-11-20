@@ -132,7 +132,9 @@ class GitHubReleaseChecker(
             return
         }
 
+        // Asset names often carry the version, so a lone APK is the same app under a new name.
         val asset = release.apkAssets.firstOrNull { it.name == latest.assetName }
+            ?: release.apkAssets.singleOrNull()
         if (asset == null) {
             store.markNeedsChoice(tracked.repo)
             return

@@ -641,6 +641,7 @@ private fun FeaturedActions(app: App, onDetails: () -> Unit, onShuffle: () -> Un
         version = remember(app) { app.suggestedVersion() },
         latestVersionCode = app.latestVersionCode,
         allowUninstall = false,
+        // The detail page shows the failure dialog; it may be open over Home for this very app.
         reportFailures = false,
     )
     val busy = actions.state.busy

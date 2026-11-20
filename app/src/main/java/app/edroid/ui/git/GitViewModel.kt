@@ -54,8 +54,8 @@ data class GitUiState(
     val rows: List<GitRow> = emptyList(),
     /** True while a pull-to-refresh check of every repo runs. */
     val refreshing: Boolean = false,
-    /** True when at least one installed repo has a newer release than the device runs. */
-    val hasUpdates: Boolean = false,
+    /** How many installed repos have a newer release than the device runs. */
+    val updateCount: Int = 0,
 )
 
 /** Holds the Git screen state: followed repos, their release checks, downloads and installs. */
@@ -80,7 +80,7 @@ class GitViewModel(
     // Install states are folded in so finishing an install re-checks which repos are still behind.
     /** Single state stream the screen collects. */
     val uiState: StateFlow<GitUiState> = combine(rows, installer.states, _refreshing) { list, _, refreshing ->
-        GitUiState(list, refreshing, list.any { isUpdatable(it.tracked) })
+        GitUiState(list, refreshing, list.count { isUpdatable(it.tracked) })
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MS), GitUiState())
 
     /** One-shot user messages (toasts) that must not replay on rotation. */
