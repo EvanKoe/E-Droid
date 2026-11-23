@@ -158,6 +158,12 @@ internal fun appInstallActions(
             message = installState.message,
             retryEnabled = version != null,
             onRetry = onInstall,
+            onUninstall = installState.conflictWith?.let { pkg ->
+                {
+                    context.requestUninstall(pkg)
+                    installer.dismissFailure(packageName)
+                }
+            },
             onClose = { installer.dismissFailure(packageName) },
         )
     }

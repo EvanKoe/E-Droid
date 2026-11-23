@@ -85,12 +85,16 @@ import app.edroid.data.github.GitHubAsset
 import app.edroid.data.github.GitHubRepo
 import app.edroid.ui.components.ActionGap
 import app.edroid.ui.components.AppInstallActions
+import app.edroid.ui.components.BAR_TINT_ALPHA
+import app.edroid.ui.components.BarBlurRadius
 import app.edroid.ui.components.GitIcon
 import app.edroid.ui.components.InstallActions
 import app.edroid.ui.components.PageTitle
 import app.edroid.ui.components.SwipeAction
 import app.edroid.ui.components.SwipeSide
 import app.edroid.ui.components.appInstallActions
+import app.edroid.ui.components.backdropBlur
+import app.edroid.ui.components.supportsBackdropBlur
 import app.edroid.ui.options.UiText
 import app.edroid.ui.search.SearchField
 import app.edroid.ui.theme.GroupedItemSpacing
@@ -252,15 +256,20 @@ fun GitScreen(
         }
 
         // Floating add and update-all bar
+        // Same frosted look as the nav bar on Android 17 QPR2+; the solid bar everywhere else.
+        val blurred = supportsBackdropBlur()
+        val barTint = MaterialTheme.colorScheme.primary.copy(alpha = BAR_TINT_ALPHA)
         Surface(
             shape = CircleShape,
-            color = Layering.item,
+            color = if (blurred) Color.Transparent else Layering.item,
             modifier = Modifier
                 .align(Alignment.BottomCenter)
                 .padding(bottom = contentPadding.calculateBottomPadding()),
         ) {
             Row(
-                Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
+                Modifier
+                    .then(if (blurred) Modifier.backdropBlur(barTint, BarBlurRadius) else Modifier)
+                    .padding(horizontal = 12.dp, vertical = 4.dp),
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {

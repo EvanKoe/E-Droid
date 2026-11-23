@@ -26,12 +26,16 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
 import app.edroid.R
 
-/** Tells the user an install failed, with the raw [message] behind a toggle and Retry / Close. */
+/**
+ * Tells the user an install failed, with the raw [message] behind a toggle and Retry / Close. A
+ * package conflict ([onUninstall] not null) offers Uninstall in place of Retry.
+ */
 @Composable
 internal fun InstallFailedDialog(
     message: String,
     retryEnabled: Boolean,
     onRetry: () -> Unit,
+    onUninstall: (() -> Unit)?,
     onClose: () -> Unit,
 ) {
     var expanded by rememberSaveable { mutableStateOf(false) }
@@ -40,7 +44,10 @@ internal fun InstallFailedDialog(
         title = { Text(stringResource(R.string.install_failed_title)) },
         text = {
             Column {
-                Text(stringResource(R.string.install_failed_body), style = MaterialTheme.typography.bodyMedium)
+                Text(
+                    stringResource(if (onUninstall != null) R.string.install_conflict_body else R.string.install_failed_body),
+                    style = MaterialTheme.typography.bodyMedium,
+                )
                 ExpandToggle(
                     text = stringResource(if (expanded) R.string.details_show_less else R.string.details_show_more),
                     expanded = expanded,
@@ -65,7 +72,11 @@ internal fun InstallFailedDialog(
             }
         },
         confirmButton = {
-            TextButton(onClick = onRetry, enabled = retryEnabled) { Text(stringResource(R.string.action_retry)) }
+            if (onUninstall != null) {
+                TextButton(onClick = onUninstall) { Text(stringResource(R.string.action_uninstall)) }
+            } else {
+                TextButton(onClick = onRetry, enabled = retryEnabled) { Text(stringResource(R.string.action_retry)) }
+            }
         },
         dismissButton = {
             TextButton(onClick = onClose) { Text(stringResource(R.string.action_close)) }
