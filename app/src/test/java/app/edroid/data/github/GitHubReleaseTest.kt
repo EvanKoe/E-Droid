@@ -90,4 +90,14 @@ class GitHubReleaseTest {
         assertEquals(5L, v.sizeBytes)
         assertEquals("https://x/a.apk", v.apkUrl)
     }
+
+    @Test
+    fun `tracked apk saved without apkCount decodes as unknown`() {
+        val apk = IndexV2StreamParser.DEFAULT_JSON.decodeFromString(
+            TrackedApk.serializer(),
+            """{"tag":"v1","assetName":"a.apk","apkUrl":"https://x/a.apk","sha256":"abc","sizeBytes":5,
+                "packageName":"p.k","appName":"App","versionCode":7,"versionName":"1.0"}""",
+        )
+        assertEquals(0, apk.apkCount)
+    }
 }

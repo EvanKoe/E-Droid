@@ -70,6 +70,8 @@ data class TrackedApk(
     val appName: String,
     val versionCode: Long,
     val versionName: String,
+    /** How many APKs the release offered; 0 when unknown (entries saved before this field existed). */
+    val apkCount: Int = 0,
 ) {
     /**
      * The tracked APK in the form the installer takes; fields only an F-Droid index knows stay empty.

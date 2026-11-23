@@ -69,6 +69,9 @@ class GitViewModel(
     private val states = MutableStateFlow<Map<String, TrackState>>(emptyMap())
     private val pending = MutableStateFlow<List<TrackedRepo>>(emptyList())
     private val jobs = mutableMapOf<String, Job>()
+
+    /** Keys whose pending APK choice is a switch, not a first pick. */
+    private val switching = mutableSetOf<String>()
     private val _refreshing = MutableStateFlow(false)
     private val _messages = Channel<UiText>(Channel.BUFFERED)
 
@@ -117,6 +120,12 @@ class GitViewModel(
     fun dismissChoice(repo: GitHubRepo) {
         val key = TrackedRepo(repo).key
         jobs.remove(key)?.cancel()
+        // A cancelled switch keeps the previous choice, which is still valid.
+        if (switching.remove(key)) {
+            setState(key, null)
+            return
+        }
+
         if (isStored(key)) {
             setState(key, null)
             store.markNeedsChoice(repo)
@@ -131,6 +140,7 @@ class GitViewModel(
     fun remove(repo: GitHubRepo) {
         val key = TrackedRepo(repo).key
         jobs.remove(key)?.cancel()
+        switching.remove(key)
         drop(key)
         store.remove(repo)
         viewModelScope.launch { checker.deleteDownloads(repo) }
@@ -164,8 +174,39 @@ class GitViewModel(
      * Installs the latest release of every installed repo that has a newer one than the device runs.
      */
     fun updateAll() {
-        uiState.value.rows.map { it.tracked }.filter(::isUpdatable).forEach { tracked ->
-            tracked.latest?.let { installer.install(it.packageName, it.appName, it.toAppVersion(), cachedApk(tracked)) }
+        uiState.value.rows.map { it.tracked }.filter(::isUpdatable).forEach(::reinstall)
+    }
+
+    /**
+     * Installs the latest APK of [tracked], downloading it again when no cached file is left.
+     */
+    fun reinstall(tracked: TrackedRepo) {
+        tracked.latest?.let { installer.install(it.packageName, it.appName, it.toAppVersion(), cachedApk(tracked)) }
+    }
+
+    /**
+     * Lists the APKs of [repo]'s latest release so the user can pick another one to install.
+     */
+    fun switchPackage(repo: GitHubRepo) {
+        val key = TrackedRepo(repo).key
+        jobs.remove(key)?.cancel()
+        setState(key, TrackState.Checking)
+        jobs[key] = viewModelScope.launch {
+            try {
+                val assets = checker.apkAssets(repo)
+                if (assets.size > 1) {
+                    switching.add(key)
+                    setState(key, TrackState.Choosing(assets))
+                } else {
+                    setState(key, null)
+                    _messages.trySend(UiText(R.string.git_switch_single))
+                }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                Log.w(TAG, "Listing APKs of $repo failed", e)
+                fail(repo, key, UiText(R.string.git_error_network, e.message ?: e.javaClass.simpleName), removePending = false)
+            }
         }
     }
 
@@ -224,15 +265,26 @@ class GitViewModel(
                     is TrackResult.Tracked -> {
                         if (isStored(key)) store.update(repo, result.apk) else store.add(TrackedRepo(repo, result.apk))
                         drop(key)
+                        if (switching.remove(key)) {
+                            reinstall(TrackedRepo(repo, result.apk))
+                        }
                     }
 
-                    TrackResult.NoApk -> fail(repo, key, UiText(R.string.git_error_no_apk), removePending = true)
+                    TrackResult.NoApk -> {
+                        switching.remove(key)
+                        fail(repo, key, UiText(R.string.git_error_no_apk), removePending = true)
+                    }
 
-                    is TrackResult.NeedsChoice -> setState(key, TrackState.Choosing(result.assets))
+                    is TrackResult.NeedsChoice -> {
+                        switching.remove(key)
+                        setState(key, TrackState.Choosing(result.assets))
+                    }
                 }
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
+                // A failed switch must not turn a later plain retry into an install
+                switching.remove(key)
                 Log.w(TAG, "Tracking $repo failed", e)
                 if (e.message == NOT_APK) {
                     fail(repo, key, UiText(R.string.git_error_not_apk), removePending = true)

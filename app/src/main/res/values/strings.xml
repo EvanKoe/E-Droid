@@ -24,7 +24,11 @@
     <string name="git_up_to_date">Up to date</string>
     <string name="action_delete">Delete</string>
     <string name="git_open_github">Open on GitHub</string>
-    <string name="git_swipe_hint">Swipe right to remove, left to open on GitHub</string>
+    <string name="git_menu_hint">Long press an app for more options</string>
+    <string name="git_more_options">More options</string>
+    <string name="git_reinstall">Reinstall</string>
+    <string name="git_switch_package">Switch package</string>
+    <string name="git_switch_single">This release has only one APK</string>
     <string name="git_remove_confirm">Stop following %1$s? The app you installed from it stays installed.</string>
     <string name="git_choose_apk">Which APK?</string>
     <string name="git_choose_apk_intro">This release has several APK files. Pick the one that fits your device.</string>

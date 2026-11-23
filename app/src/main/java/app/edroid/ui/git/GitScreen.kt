@@ -5,11 +5,19 @@ import android.content.Intent
 import android.util.Log
 import android.text.format.Formatter
 import android.widget.Toast
+import androidx.activity.compose.BackHandler
 import androidx.annotation.StringRes
 import androidx.compose.animation.animateContentSize
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -20,6 +28,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.shape.CircleShape
@@ -33,6 +42,7 @@ import androidx.compose.material.icons.rounded.Download
 import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.Refresh
 import androidx.compose.material.icons.rounded.RemoveCircleOutline
+import androidx.compose.material.icons.rounded.SwapHoriz
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -63,10 +73,20 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
+import androidx.compose.ui.graphics.TransformOrigin
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.layout.boundsInRoot
+import androidx.compose.ui.layout.layout
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalHapticFeedback
@@ -76,6 +96,7 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.core.net.toUri
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -90,8 +111,6 @@ import app.edroid.ui.components.BarBlurRadius
 import app.edroid.ui.components.GitIcon
 import app.edroid.ui.components.InstallActions
 import app.edroid.ui.components.PageTitle
-import app.edroid.ui.components.SwipeAction
-import app.edroid.ui.components.SwipeSide
 import app.edroid.ui.components.appInstallActions
 import app.edroid.ui.components.backdropBlur
 import app.edroid.ui.components.supportsBackdropBlur
@@ -116,6 +135,23 @@ private const val AVATAR_URL_SUFFIX = ".png?size=120"
 
 /** Converts a 0..1 download fraction to a percentage. */
 private const val PERCENT = 100
+
+/** Narrowest the long-press menu gets, however short its labels. */
+private val MenuMinWidth = 200.dp
+
+/** How far the long-press menu sits from its card's left edge: lines up with the card's text column. */
+private val MenuOffsetX = 72.dp
+
+/** How far the long-press menu sits below its card's top edge. */
+private val MenuOffsetY = 16.dp
+
+/** How long the long-press menu takes to shrink away. */
+private const val MENU_EXIT_MS = 220
+
+/**
+ * One entry of the long-press menu.
+ */
+private class MenuItem(val icon: ImageVector, @StringRes val label: Int, val onClick: () -> Unit)
 
 /**
  * Resolves a [UiText] into a localized string, applying its optional argument.
@@ -148,6 +184,12 @@ fun GitScreen(
     var adding by rememberSaveable { mutableStateOf(false) }
     var query by rememberSaveable { mutableStateOf("") }
     var removingKey by rememberSaveable { mutableStateOf<String?>(null) }
+
+    // The long-pressed row's key and its card bounds in root coordinates; not saved, so a rotation closes the menu.
+    var menu by remember { mutableStateOf<Pair<String, Rect>?>(null) }
+
+    // False while the menu shrinks away; it stays composed until that animation ends.
+    var menuOpen by remember { mutableStateOf(false) }
 
     val openRepoPage = { repo: GitHubRepo ->
         runCatching {
@@ -212,39 +254,25 @@ fun GitScreen(
             shown.forEachIndexed { index, row ->
                 val shape = groupedShapeAt(index, shown.size)
 
-                // Keyed so a removed row's swipe state is not handed to the row that takes its place.
+                // Keyed so a removed row's remembered state is not handed to the row that takes its place.
                 key(row.tracked.key) {
-                    SwipeAction(
+                    GitRepoCard(
+                        row = row,
                         shape = shape,
-                        start = SwipeSide(
-                            icon = Icons.Rounded.RemoveCircleOutline,
-                            label = R.string.action_remove,
-                            containerColor = MaterialTheme.colorScheme.errorContainer,
-                            settlesBack = true,
-                            onAction = {
-                                haptics.performHapticFeedback(HapticFeedbackType.VirtualKey)
-                                removingKey = row.tracked.key
-                            },
-                        ),
-                        end = SwipeSide(
-                            icon = Icons.AutoMirrored.Rounded.OpenInNew,
-                            label = R.string.git_open_github,
-                            settlesBack = true,
-                            onAction = {
-                                haptics.performHapticFeedback(HapticFeedbackType.VirtualKey)
-                                openRepoPage(row.tracked.repo)
-                            },
-                        ),
-                    ) {
-                        GitRepoCard(row, shape, viewModel)
-                    }
+                        viewModel = viewModel,
+                        onLongPress = {
+                            haptics.performHapticFeedback(HapticFeedbackType.VirtualKey)
+                            menu = row.tracked.key to it
+                            menuOpen = true
+                        },
+                    )
                 }
             }
 
-            // Swipe hint
+            // Long-press hint
             if (shown.isNotEmpty()) {
                 Text(
-                    stringResource(R.string.git_swipe_hint),
+                    stringResource(R.string.git_menu_hint),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     textAlign = TextAlign.Center,
@@ -253,6 +281,42 @@ fun GitScreen(
             }
 
             Spacer(Modifier.height(AddButtonClearance))
+        }
+
+        // Long-press menu; looked up in the rows so a row that disappeared closes it
+        menu?.let { (menuKey, anchor) ->
+            rows.firstOrNull { it.tracked.key == menuKey }?.let { row ->
+                val latest = row.tracked.latest
+                val idle = latest != null && row.state == null
+                val item = { icon: ImageVector, label: Int, action: () -> Unit ->
+                    MenuItem(icon, label) {
+                        haptics.performHapticFeedback(HapticFeedbackType.VirtualKey)
+                        menuOpen = false
+                        action()
+                    }
+                }
+
+                GitRowMenu(
+                    anchor = anchor,
+                    items = buildList {
+                        add(item(Icons.Rounded.RemoveCircleOutline, R.string.action_remove) { removingKey = row.tracked.key })
+                        add(item(Icons.AutoMirrored.Rounded.OpenInNew, R.string.git_open_github) { openRepoPage(row.tracked.repo) })
+
+                        if (idle) {
+                            add(item(Icons.Rounded.Refresh, R.string.git_reinstall) { viewModel.reinstall(row.tracked) })
+                        }
+
+                        // An unknown count (0, saved before it was stored) still offers the switch.
+                        if (idle && latest?.apkCount != 1) {
+                            add(item(Icons.Rounded.SwapHoriz, R.string.git_switch_package) { viewModel.switchPackage(row.tracked.repo) })
+                        }
+                    },
+                    bottomInset = contentPadding.calculateBottomPadding() + AddButtonClearance,
+                    open = menuOpen,
+                    onDismiss = { menuOpen = false },
+                    onClosed = { menu = null },
+                )
+            } ?: LaunchedEffect(menuKey) { menu = null } // Row gone: forget the stale anchor
         }
 
         // Floating add and update-all bar
@@ -357,12 +421,15 @@ private fun RemoveRepoDialog(repoName: String, onConfirm: () -> Unit, onDismiss:
 
 /**
  * Card for one followed repo: avatar, name, versions, then install actions or its tracking status.
+ *
+ * @param onLongPress called with the card's bounds in root coordinates when it is long-pressed.
  */
 @Composable
-private fun GitRepoCard(row: GitRow, shape: Shape, viewModel: GitViewModel) {
+private fun GitRepoCard(row: GitRow, shape: Shape, viewModel: GitViewModel, onLongPress: (Rect) -> Unit) {
     val tracked = row.tracked
     val latest = tracked.latest
     var expanded by rememberSaveable(tracked.key) { mutableStateOf(false) }
+    var bounds by remember { mutableStateOf(Rect.Zero) }
 
     val actions = latest?.let {
         appInstallActions(
@@ -380,8 +447,15 @@ private fun GitRepoCard(row: GitRow, shape: Shape, viewModel: GitViewModel) {
     val updatable = actions?.state?.updateAvailable == true
 
     Card(
-        onClick = { expanded = !expanded },
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(shape)
+            .onGloballyPositioned { bounds = it.boundsInRoot() }
+            .combinedClickable(
+                onClick = { expanded = !expanded },
+                onLongClick = { onLongPress(bounds) },
+                onLongClickLabel = stringResource(R.string.git_more_options),
+            ),
         shape = shape,
         colors = if (updatable) {
             CardDefaults.cardColors(containerColor = scheme.primaryContainer, contentColor = scheme.onPrimaryContainer)
@@ -470,6 +544,108 @@ private fun GitRepoCard(row: GitRow, shape: Shape, viewModel: GitViewModel) {
                     actionLabel = R.string.git_choose_apk,
                     onAction = { viewModel.retry(tracked.repo) },
                 )
+            }
+        }
+    }
+}
+
+/**
+ * The long-press menu: rounded tiles drawn over the list next to the pressed card. It lives in the
+ * list's own window, not a popup, so the tiles' backdrop blur has the list behind it.
+ *
+ * @param anchor the pressed card's bounds in root coordinates.
+ * @param bottomInset room kept free at the bottom, so the menu stays above the floating bar.
+ * @param open false makes the menu shrink away, then call [onClosed].
+ * @param onDismiss called on a tap outside the tiles and on Back.
+ * @param onClosed called once the menu has finished shrinking away.
+ */
+@Composable
+private fun GitRowMenu(
+    anchor: Rect,
+    items: List<MenuItem>,
+    bottomInset: Dp,
+    open: Boolean,
+    onDismiss: () -> Unit,
+    onClosed: () -> Unit,
+) {
+    val blurred = supportsBackdropBlur()
+    val tint = MaterialTheme.colorScheme.primary.copy(alpha = BAR_TINT_ALPHA)
+    var origin by remember { mutableStateOf(Offset.Zero) }
+
+    // Scale only: fading through alpha would put the tiles in an offscreen layer and blank their backdrop blur
+    val scale = remember { Animatable(0f) }
+
+    LaunchedEffect(open) {
+        if (open) {
+            scale.animateTo(1f, spring(Spring.DampingRatioLowBouncy, Spring.StiffnessLow))
+        } else {
+            scale.animateTo(0f, tween(MENU_EXIT_MS))
+            onClosed()
+        }
+    }
+
+    BackHandler(enabled = open) { onDismiss() }
+
+    // Dismiss layer; it also keeps touches from reaching the list
+    Box(
+        Modifier
+            .fillMaxSize()
+            .onGloballyPositioned { origin = it.positionInRoot() }
+            .pointerInput(onDismiss) { detectTapGestures { onDismiss() } },
+    ) {
+
+        // Tiles, placed by the card and kept inside the box and above the bottom inset
+        Column(
+            modifier = Modifier
+                .layout { measurable, constraints ->
+                    val placeable = measurable.measure(constraints)
+                    val x = (anchor.left - origin.x).toInt() + MenuOffsetX.roundToPx()
+                    val y = (anchor.top - origin.y).toInt() + MenuOffsetY.roundToPx()
+                    val maxX = (constraints.maxWidth - placeable.width).coerceAtLeast(0)
+                    val maxY = (constraints.maxHeight - bottomInset.roundToPx() - placeable.height).coerceAtLeast(0)
+
+                    layout(placeable.width, placeable.height) {
+                        placeable.place(x.coerceIn(0, maxX), y.coerceIn(0, maxY))
+                    }
+                }
+                // Grows out of, and shrinks back into, the middle of its top edge
+                .graphicsLayer {
+                    scaleX = scale.value
+                    scaleY = scale.value
+                    transformOrigin = TransformOrigin(0.5f, 0f)
+                }
+                .widthIn(min = MenuMinWidth)
+                .width(IntrinsicSize.Max),
+            verticalArrangement = Arrangement.spacedBy(GroupedItemSpacing),
+        ) {
+            items.forEachIndexed { index, item ->
+                Surface(
+                    onClick = item.onClick,
+                    shape = groupedShapeAt(index, items.size),
+                    color = if (blurred) Color.Transparent else MaterialTheme.colorScheme.surface,
+                ) {
+                    Row(
+                        Modifier
+                            .fillMaxWidth()
+                            .then(if (blurred) Modifier.backdropBlur(tint, BarBlurRadius) else Modifier)
+                            .padding(horizontal = 16.dp, vertical = 14.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+
+                        // Icon
+                        Icon(
+                            item.icon,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(18.dp),
+                        )
+
+                        Spacer(Modifier.width(12.dp))
+
+                        // Label
+                        Text(stringResource(item.label), style = MaterialTheme.typography.bodyLarge, maxLines = 1)
+                    }
+                }
             }
         }
     }
