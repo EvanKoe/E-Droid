@@ -82,7 +82,20 @@ sealed interface InstallState {
     data class Downloading(val progress: Float?) : InstallState
     /** Handed to the system; waiting on its confirmation dialog or the install itself. */
     data object Installing : InstallState
-    data class Failed(val message: String) : InstallState
+    /** [conflictWith] is the installed package whose removal should let the install through; null for any non-conflict failure. */
+    data class Failed(val message: String, val conflictWith: String? = null) : InstallState
+}
+
+/**
+ * The installed package standing in the way of [target]'s install: [otherPackage] when the system
+ * names one, else [target] itself. Null unless [status] is a conflict and that package [isInstalled].
+ */
+internal fun conflictingPackage(status: Int, otherPackage: String?, target: String, isInstalled: (String) -> Boolean): String? {
+    if (status != PackageInstaller.STATUS_FAILURE_CONFLICT) {
+        return null
+    }
+
+    return (otherPackage ?: target).takeIf(isInstalled)
 }
 
 /**
@@ -218,6 +231,13 @@ class ApkInstaller(private val context: Context, private val client: OkHttpClien
     }
 
     /**
+     * Acknowledges a reported failure so its dialog does not reopen; leaves a retry already underway alone.
+     */
+    fun dismissFailure(packageName: String) {
+        _states.update { if (it[packageName] is InstallState.Failed) it - packageName else it }
+    }
+
+    /**
      * Copies [input] into the session's base.apk, reporting progress; returns the SHA-256 as lowercase hex.
      */
     private suspend fun writeApk(session: PackageInstaller.Session, input: InputStream, total: Long?, download: Download): String {
@@ -344,6 +364,11 @@ class ApkInstaller(private val context: Context, private val client: OkHttpClien
 
                 else -> InstallState.Failed(
                     intent.getStringExtra(PackageInstaller.EXTRA_STATUS_MESSAGE) ?: "Install failed ($status)",
+                    conflictWith = conflictingPackage(
+                        status,
+                        intent.getStringExtra(PackageInstaller.EXTRA_OTHER_PACKAGE_NAME),
+                        target.packageName,
+                    ) { context.installedVersionCodeNow(it) != null },
                 )
             },
         )

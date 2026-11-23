@@ -7,7 +7,10 @@ plugins {
 
 android {
     namespace = "app.edroid"
-    compileSdk = 36
+    // The minor level (37.2) is needed for RenderNode.setBackdropRenderEffect (the bottom bars' blur).
+    compileSdk {
+        version = release(37) { minorApiLevel = 2 }
+    }
 
     defaultConfig {
         applicationId = "app.edroid"

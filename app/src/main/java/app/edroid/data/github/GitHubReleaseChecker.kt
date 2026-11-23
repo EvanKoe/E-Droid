@@ -83,9 +83,15 @@ class GitHubReleaseChecker(
                 appName = info.appName,
                 versionCode = info.versionCode,
                 versionName = info.versionName,
+                apkCount = release.apkAssets.size,
             ),
         )
     }
+
+    /**
+     * Lists the APKs of [repo]'s latest release, without [track]'s automatic pick.
+     */
+    suspend fun apkAssets(repo: GitHubRepo): List<GitHubAsset> = service.latestRelease(repo)?.apkAssets.orEmpty()
 
     /**
      * Whether the latest release of [tracked] is newer than the installed app; false when not installed.
@@ -132,7 +138,9 @@ class GitHubReleaseChecker(
             return
         }
 
+        // Asset names often carry the version, so a lone APK is the same app under a new name.
         val asset = release.apkAssets.firstOrNull { it.name == latest.assetName }
+            ?: release.apkAssets.singleOrNull()
         if (asset == null) {
             store.markNeedsChoice(tracked.repo)
             return

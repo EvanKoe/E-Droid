@@ -1,6 +1,5 @@
 package app.edroid.ui.updates
 
-import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.fadeIn
@@ -24,7 +23,6 @@ import androidx.compose.foundation.lazy.LazyItemScope
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.CheckCircle
-import androidx.compose.material.icons.rounded.KeyboardArrowUp
 import androidx.compose.material.icons.rounded.VisibilityOff
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -34,7 +32,6 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.material3.pulltorefresh.PullToRefreshDefaults
 import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
@@ -48,8 +45,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.rotate
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalLayoutDirection
@@ -65,6 +60,7 @@ import app.edroid.data.fdroid.SyncState
 import app.edroid.data.fdroid.model.App
 import app.edroid.ui.components.ActionGap
 import app.edroid.ui.components.CancelWidth
+import app.edroid.ui.components.ExpandToggle
 import app.edroid.ui.components.InstallActions
 import app.edroid.ui.components.PageTitle
 import app.edroid.ui.components.appInstallActions
@@ -82,12 +78,6 @@ private val UpdateButtonHeight = 40.dp
 /** Update's width at rest; the same as Cancel's, so only the progress bar moves in when it starts. */
 private val UpdateButtonWidth = CancelWidth
 
-/** Rotation, in degrees, of the hidden-toggle chevron while the hidden rows are shown. */
-private const val CHEVRON_EXPANDED_DEGREES = 180f
-
-/** Scale of the hidden toggle while expanded. */
-private const val TOGGLE_EXPANDED_SCALE = 1.08f
-
 /** Separator between the installed and the latest version on a row. */
 private const val VERSION_ARROW = "  →  "
 
@@ -100,7 +90,7 @@ private const val VERSION_ARROW = "  →  "
  *
  * @param contentPadding insets handed down by `MainScreen` so content clears both scrims.
  * @param detailPackageName the app whose detail page is open over this tab, if any. That page
- *   toasts its own install failures, so its row here stays quiet to avoid a second toast.
+ *   shows its own install-failure dialog, so its row here stays quiet to avoid a second one.
  * @param onAppClick opens an app's detail page.
  */
 @Composable
@@ -240,8 +230,8 @@ fun UpdatesScreen(
 
             // Hidden rows toggle
             if (hidden.isNotEmpty()) {
-                HiddenToggle(
-                    count = hidden.size,
+                ExpandToggle(
+                    text = pluralStringResource(R.plurals.updates_hidden_count, hidden.size, hidden.size),
                     expanded = showHidden,
                     onClick = { showHidden = !showHidden },
                     modifier = Modifier
@@ -281,54 +271,6 @@ private fun EmptyState(loading: Boolean) {
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             textAlign = TextAlign.Center,
         )
-    }
-}
-
-/**
- * "N hidden updates" with a chevron, pinned under the list; tapping it shows the hidden rows at the list's end.
- */
-@Composable
-private fun HiddenToggle(
-    count: Int,
-    expanded: Boolean,
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    // Chevron flip and a slight grow ride the same overshooting spring as the row buttons.
-    val chevron by animateFloatAsState(if (expanded) CHEVRON_EXPANDED_DEGREES else 0f, bouncySpring(), label = "hiddenChevron")
-    val scale by animateFloatAsState(if (expanded) TOGGLE_EXPANDED_SCALE else 1f, bouncySpring(), label = "hiddenScale")
-
-    // Expanded, the toggle fills in as a pill so it reads as the "on" state of the rows above it.
-    val colors = MaterialTheme.colorScheme
-    val motion = MaterialTheme.motionScheme
-
-    val container by animateColorAsState(
-        if (expanded) colors.primaryContainer else Color.Transparent, motion.defaultEffectsSpec(), label = "hiddenContainer",
-    )
-
-    val content by animateColorAsState(
-        if (expanded) colors.primary else colors.onSurfaceVariant, motion.defaultEffectsSpec(), label = "hiddenContent",
-    )
-
-    // Toggle button
-    TextButton(
-        onClick = onClick,
-        shapes = ButtonDefaults.shapes(), // expressive press morph, same as the install buttons
-        colors = ButtonDefaults.textButtonColors(containerColor = container, contentColor = content),
-        contentPadding = PaddingValues(horizontal = 36.dp, vertical = 12.dp),
-        modifier = modifier.graphicsLayer {
-            scaleX = scale
-            scaleY = scale
-        },
-    ) {
-        Text(
-            pluralStringResource(R.plurals.updates_hidden_count, count, count),
-            style = MaterialTheme.typography.bodyLarge,
-        )
-
-        Spacer(Modifier.width(12.dp))
-
-        Icon(Icons.Rounded.KeyboardArrowUp, contentDescription = null, modifier = Modifier.rotate(chevron))
     }
 }
 

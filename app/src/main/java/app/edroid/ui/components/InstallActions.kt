@@ -3,7 +3,6 @@ package app.edroid.ui.components
 import android.Manifest
 import android.content.pm.PackageManager
 import android.os.Build
-import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.annotation.StringRes
@@ -37,7 +36,6 @@ import androidx.compose.material3.LinearWavyProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
@@ -108,8 +106,8 @@ internal class AppInstallActions(
  * @param latestVersionCode the newest version known from the app row, so Update can show before
  *   [version] is known.
  * @param allowUninstall whether an installed app offers Uninstall beside Open or Update.
- * @param reportFailures toasts install failures. Only one caller per package should, or a page
- *   drawn over another showing the same app toasts twice.
+ * @param reportFailures shows the install-failure dialog. Only one caller per package should, or a
+ *   page drawn over another showing the same app shows two.
  * @param installSource an already downloaded APK to install instead of fetching [version], if any.
  */
 @Composable
@@ -126,12 +124,6 @@ internal fun appInstallActions(
     val installer = remember(context) { (context.applicationContext as EDroidApp).container.apkInstaller }
     val installStates by installer.states.collectAsStateWithLifecycle()
     val installState = installStates[packageName] ?: InstallState.Idle
-
-    if (reportFailures) {
-        LaunchedEffect(installState) {
-            (installState as? InstallState.Failed)?.let { Toast.makeText(context, it.message, Toast.LENGTH_LONG).show() }
-        }
-    }
 
     // Seeded synchronously so an installed app doesn't open on Install and animate over to Uninstall.
     val initialInstalledVersion = remember(context, packageName) { context.installedVersionCodeNow(packageName) }
@@ -151,6 +143,31 @@ internal fun appInstallActions(
     // Lets the "ready to install" notification show when a download finishes in the background.
     val notificationPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) {}
 
+    val onInstall: () -> Unit = {
+        if (Build.VERSION.SDK_INT >= 33 &&
+            ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
+        ) {
+            notificationPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
+        }
+
+        version?.let { installer.install(packageName, appName, it, installSource()) }
+    }
+
+    if (reportFailures && installState is InstallState.Failed) {
+        InstallFailedDialog(
+            message = installState.message,
+            retryEnabled = version != null,
+            onRetry = onInstall,
+            onUninstall = installState.conflictWith?.let { pkg ->
+                {
+                    context.requestUninstall(pkg)
+                    installer.dismissFailure(packageName)
+                }
+            },
+            onClose = { installer.dismissFailure(packageName) },
+        )
+    }
+
     return AppInstallActions(
         state = ActionsState(
             install = installState,
@@ -161,15 +178,7 @@ internal fun appInstallActions(
             allowUninstall = allowUninstall,
             installedVersionName = installedVersionName,
         ),
-        onInstall = {
-            if (Build.VERSION.SDK_INT >= 33 &&
-                ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
-            ) {
-                notificationPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
-            }
-
-            version?.let { installer.install(packageName, appName, it, installSource()) }
-        },
+        onInstall = onInstall,
         onOpen = { context.openApp(packageName) },
         onUninstall = { context.requestUninstall(packageName) },
         onCancel = { installer.cancel(packageName) },

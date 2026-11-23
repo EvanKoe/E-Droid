@@ -20,7 +20,12 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.graphics.Color
 import app.edroid.R
+import app.edroid.ui.components.BAR_TINT_ALPHA
+import app.edroid.ui.components.BarBlurRadius
+import app.edroid.ui.components.backdropBlur
+import app.edroid.ui.components.supportsBackdropBlur
 import app.edroid.ui.theme.Layering
 
 /** Elevation of the floating bar. */
@@ -35,27 +40,36 @@ private val TitleMaxWidth = 220.dp
  */
 @Composable
 fun DetailBackBar(title: String, onBack: () -> Unit, modifier: Modifier = Modifier) {
+    val colors = MaterialTheme.colorScheme
+    // Same frosted look as the nav bar on Android 17 QPR2+, with its colours inverted the same way.
+    val blurred = supportsBackdropBlur()
     Surface(
         onClick = onBack,
         modifier = modifier,
         shape = CircleShape,
-        color = MaterialTheme.colorScheme.primary,
-        contentColor = MaterialTheme.colorScheme.onPrimary,
-        shadowElevation = BarShadowElevation,
+        color = if (blurred) Color.Transparent else colors.primary,
+        contentColor = if (blurred) colors.onSurface else colors.onPrimary,
+        shadowElevation = if (blurred) 0.dp else BarShadowElevation,
     ) {
         Row(
-            modifier = Modifier.padding(start = 8.dp, top = 8.dp, bottom = 8.dp, end = 24.dp),
+            modifier = Modifier
+                .then(if (blurred) Modifier.backdropBlur(colors.primary.copy(alpha = BAR_TINT_ALPHA), BarBlurRadius) else Modifier)
+                .padding(start = 8.dp, top = 8.dp, bottom = 8.dp, end = 24.dp),
             horizontalArrangement = Arrangement.spacedBy(16.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
 
             // Back button
-            Surface(shape = CircleShape, color = Layering.navSelected, modifier = Modifier.size(48.dp)) {
+            Surface(
+                shape = CircleShape,
+                color = if (blurred) colors.primary else Layering.navSelected,
+                modifier = Modifier.size(48.dp),
+            ) {
                 Box(contentAlignment = Alignment.Center) {
                     Icon(
                         Icons.AutoMirrored.Rounded.ArrowBack,
                         contentDescription = stringResource(R.string.action_back),
-                        tint = MaterialTheme.colorScheme.primary,
+                        tint = if (blurred) colors.onPrimary else colors.primary,
                     )
                 }
             }
